@@ -16,6 +16,7 @@ conn = sqlite3.connect("banco.db", check_same_thread=False)
 cursor = conn.cursor()
 
 cursor.execute("CREATE TABLE IF NOT EXISTS turmas (id INTEGER PRIMARY KEY, codigo TEXT)")
+cursor.execute("CREATE TABLE IF NOT EXISTS disciplinas (id INTEGER PRIMARY KEY, codigo TEXT, nome TEXT)")
 cursor.execute("CREATE TABLE IF NOT EXISTS alunos (codigo TEXT, nome TEXT, turma_id INTEGER)")
 cursor.execute("CREATE TABLE IF NOT EXISTS aulas (id TEXT, turma_id INTEGER, data TEXT)")
 cursor.execute("CREATE TABLE IF NOT EXISTS presenca (codigo TEXT, aula_id TEXT, dispositivo TEXT)")
@@ -28,16 +29,41 @@ def home():
     turmas = cursor.execute("SELECT * FROM turmas").fetchall()
 
     html = "<h2>Turmas</h2>"
-    html += '<a href="/nova_turma">Nova Turma</a><br><br>'
+    html += '<a href="/nova_turma">Nova Turma</a> | '
+    html += '<a href="/nova_disciplina">Nova Disciplina</a><br><br>'
 
     for t in turmas:
         html += f"""
         <b>{t[1]}</b><br>
-        <a href="/importar/{t[0]}">Importar Alunos</a> | 
+        <a href="/importar/{t[0]}">Importar</a> | 
         <a href="/iniciar/{t[0]}">Iniciar Aula</a><br><br>
         """
 
     return html
+
+# -------- DISCIPLINA --------
+@app.route("/nova_disciplina", methods=["GET", "POST"])
+def nova_disciplina():
+    if request.method == "POST":
+        codigo = request.form["codigo"]
+        nome = request.form["nome"]
+
+        cursor.execute(
+            "INSERT INTO disciplinas (codigo, nome) VALUES (?, ?)",
+            (codigo, nome)
+        )
+        conn.commit()
+
+        return redirect("/")
+
+    return """
+    <h2>Nova Disciplina</h2>
+    <form method="post">
+        Código: <input name="codigo"><br><br>
+        Nome: <input name="nome"><br><br>
+        <button>Cadastrar</button>
+    </form>
+    """
 
 # -------- NOVA TURMA --------
 @app.route("/nova_turma", methods=["GET", "POST"])
@@ -61,30 +87,23 @@ def nova_turma():
 def importar(turma_id):
 
     if request.method == "POST":
-        try:
-            file = request.files["file"]
-            df = pd.read_excel(file, header=6)
+        file = request.files["file"]
+        df = pd.read_excel(file, header=6)
 
-            total = 0
+        for _, row in df.iterrows():
+            nome = str(row["Nome do Aluno"]).strip()
+            codigo = str(row["Código"]).strip()
 
-            for _, row in df.iterrows():
-                nome = str(row["Nome do Aluno"]).strip()
-                codigo = str(row["Código"]).strip()
+            if nome == "nan" or codigo == "nan":
+                continue
 
-                if nome == "nan" or codigo == "nan":
-                    continue
+            cursor.execute(
+                "INSERT INTO alunos VALUES (?, ?, ?)",
+                (codigo, nome, turma_id)
+            )
 
-                cursor.execute(
-                    "INSERT INTO alunos (codigo, nome, turma_id) VALUES (?, ?, ?)",
-                    (codigo, nome, turma_id)
-                )
-                total += 1
-
-            conn.commit()
-            return f"Importado com sucesso! {total} alunos <br><a href='/'>Voltar</a>"
-
-        except Exception as e:
-            return f"Erro: {str(e)}"
+        conn.commit()
+        return "Importado com sucesso! <br><a href='/'>Voltar</a>"
 
     return """
     <h2>Importar Alunos</h2>
@@ -143,15 +162,13 @@ def iniciar(turma_id):
     </script>
     """
 
-# -------- BUSCAR ALUNO --------
+# -------- BUSCAR --------
 @app.route("/buscar_aluno/<int:turma_id>")
 def buscar_aluno(turma_id):
-
     termo = request.args.get("q", "").upper()
 
     dados = cursor.execute("""
-    SELECT codigo, nome
-    FROM alunos
+    SELECT codigo, nome FROM alunos
     WHERE turma_id = ?
     AND nome LIKE ?
     LIMIT 10
@@ -162,7 +179,6 @@ def buscar_aluno(turma_id):
 # -------- PRESENÇAS --------
 @app.route("/presencas/<aula_id>")
 def presencas(aula_id):
-
     dados = cursor.execute("""
     SELECT p.codigo, a.nome
     FROM presenca p
@@ -172,42 +188,27 @@ def presencas(aula_id):
 
     return {"dados": dados}
 
-# -------- AULA (ALUNO) --------
+# -------- AULA --------
 @app.route("/aula/<aula_id>", methods=["GET", "POST"])
 def aula(aula_id):
 
     cursor.execute("SELECT turma_id FROM aulas WHERE id=?", (aula_id,))
     turma_id = cursor.fetchone()[0]
 
-    dispositivo = request.cookies.get("device_id") or str(uuid.uuid4())
     codigo_salvo = request.cookies.get("codigo_aluno")
 
-    # AUTO LOGIN
     if codigo_salvo:
-        cursor.execute("SELECT 1 FROM alunos WHERE codigo=? AND turma_id=?", (codigo_salvo, turma_id))
-        if cursor.fetchone():
-            cursor.execute("SELECT 1 FROM presenca WHERE codigo=? AND aula_id=?", (codigo_salvo, aula_id))
-            if not cursor.fetchone():
-                cursor.execute("INSERT INTO presenca VALUES (?, ?, ?)", (codigo_salvo, aula_id, dispositivo))
-                conn.commit()
+        cursor.execute("INSERT INTO presenca VALUES (?, ?, ?)", (codigo_salvo, aula_id, "auto"))
+        conn.commit()
+        return "<h2 style='text-align:center;color:#b30000;'>Presença automática ✅</h2>"
 
-            return f"""
-            <h2 style="text-align:center;">✅ Presença confirmada automaticamente</h2>
-            """
-
-    # PRIMEIRO ACESSO
     if request.method == "POST":
         codigo = request.form["codigo"]
-
-        cursor.execute("INSERT INTO presenca VALUES (?, ?, ?)", (codigo, aula_id, dispositivo))
+        cursor.execute("INSERT INTO presenca VALUES (?, ?, ?)", (codigo, aula_id, "manual"))
         conn.commit()
 
-        resp = make_response("""
-        <h2 style="text-align:center;">✅ Presença registrada com sucesso</h2>
-        """)
-
-        resp.set_cookie("codigo_aluno", codigo, max_age=60*60*24*365)
-
+        resp = make_response("<h2 style='text-align:center;color:#b30000;'>Presença confirmada ✅</h2>")
+        resp.set_cookie("codigo_aluno", codigo)
         return resp
 
     return f"""
@@ -215,11 +216,10 @@ def aula(aula_id):
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <style>
 body {{
     font-family: Arial;
-    background: linear-gradient(135deg, #4facfe, #00f2fe);
+    background: #b30000;
     text-align: center;
     padding: 20px;
 }}
@@ -228,43 +228,33 @@ body {{
     background: white;
     padding: 25px;
     border-radius: 15px;
-    box-shadow: 0px 5px 15px rgba(0,0,0,0.2);
 }}
 
 h2 {{
-    font-size: 26px;
+    color: #b30000;
+}}
+
+button {{
+    background: #b30000;
+    color: white;
+    padding: 15px;
+    width: 90%;
+    font-size: 18px;
+    border: none;
+    border-radius: 10px;
 }}
 
 input {{
     width: 90%;
     padding: 15px;
-    font-size: 18px;
-    margin-bottom: 10px;
-}}
-
-button {{
-    width: 95%;
-    padding: 15px;
-    font-size: 20px;
-    background: #28a745;
-    color: white;
-    border: none;
-    border-radius: 10px;
-}}
-
-ul {{
-    list-style: none;
-    padding: 0;
+    margin: 10px;
 }}
 
 li {{
-    background: #f2f2f2;
-    margin: 5px 0;
-    padding: 15px;
-    font-size: 18px;
-    border-radius: 8px;
+    background: #eee;
+    padding: 10px;
+    margin: 5px;
 }}
-
 </style>
 </head>
 
@@ -272,16 +262,15 @@ li {{
 
 <div class="card">
 
-<h2>📚 Confirmar Presença</h2>
+<h2>📚 Presença UNIALFA</h2>
 
-<input type="text" id="busca" placeholder="Digite seu nome..." onkeyup="buscar()">
+<input id="busca" placeholder="Digite seu nome..." onkeyup="buscar()">
 
 <ul id="lista"></ul>
 
-<form method="post" onsubmit="bloquear()">
+<form method="post">
     <input name="codigo" id="codigo" placeholder="Matrícula">
-    <br><br>
-    <button id="btn">Confirmar Presença</button>
+    <button>Confirmar</button>
 </form>
 
 </div>
@@ -310,40 +299,11 @@ async function buscar() {{
         lista.appendChild(li);
     }});
 }}
-
-function bloquear() {{
-    document.getElementById("btn").disabled = true;
-    document.getElementById("btn").innerText = "Registrando...";
-}}
 </script>
 
 </body>
 </html>
 """
-
-# -------- FALTANTES --------
-@app.route("/faltantes/<aula_id>")
-def faltantes(aula_id):
-
-    query = """
-    SELECT a.codigo, a.nome
-    FROM alunos a
-    JOIN aulas au ON au.turma_id = a.turma_id
-    WHERE au.id = ?
-    AND a.codigo NOT IN (
-        SELECT codigo FROM presenca WHERE aula_id = ?
-    )
-    ORDER BY a.nome
-    """
-
-    df = pd.read_sql(query, conn, params=(aula_id, aula_id))
-    df["Status"] = "FALTA"
-
-    output = io.BytesIO()
-    df.to_excel(output, index=False)
-    output.seek(0)
-
-    return send_file(output, download_name="faltantes.xlsx", as_attachment=True)
 
 # -------- RODAR --------
 if __name__ == "__main__":
