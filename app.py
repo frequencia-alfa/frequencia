@@ -32,9 +32,9 @@ def home():
 
     for t in turmas:
         html += f"""
-        {t[1]} 
-        <a href="/importar/{t[0]}">Importar</a> | 
-        <a href="/iniciar/{t[0]}">Iniciar Aula</a><br>
+        <b>{t[1]}</b><br>
+        <a href="/importar/{t[0]}">Importar Alunos</a> | 
+        <a href="/iniciar/{t[0]}">Iniciar Aula</a><br><br>
         """
 
     return html
@@ -118,6 +118,8 @@ def iniciar(turma_id):
 
     <p><a href="{link}">{link}</a></p>
 
+    <p><a href="/faltantes/{aula_id}">📥 Exportar Faltantes</a></p>
+
     <h3>Presentes:</h3>
     <ul id="lista"></ul>
 
@@ -189,7 +191,9 @@ def aula(aula_id):
                 cursor.execute("INSERT INTO presenca VALUES (?, ?, ?)", (codigo_salvo, aula_id, dispositivo))
                 conn.commit()
 
-            return f"<h2>Presença automática ✅</h2><p>{codigo_salvo}</p>"
+            return f"""
+            <h2 style="text-align:center;">✅ Presença confirmada automaticamente</h2>
+            """
 
     # PRIMEIRO ACESSO
     if request.method == "POST":
@@ -198,7 +202,10 @@ def aula(aula_id):
         cursor.execute("INSERT INTO presenca VALUES (?, ?, ?)", (codigo, aula_id, dispositivo))
         conn.commit()
 
-        resp = make_response(f"<h2>Presença confirmada ✅</h2><p>{codigo}</p>")
+        resp = make_response("""
+        <h2 style="text-align:center;">✅ Presença registrada com sucesso</h2>
+        """)
+
         resp.set_cookie("codigo_aluno", codigo, max_age=60*60*24*365)
 
         return resp
@@ -208,29 +215,38 @@ def aula(aula_id):
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <style>
 body {{
     font-family: Arial;
+    background: linear-gradient(135deg, #4facfe, #00f2fe);
     text-align: center;
     padding: 20px;
 }}
 
+.card {{
+    background: white;
+    padding: 25px;
+    border-radius: 15px;
+    box-shadow: 0px 5px 15px rgba(0,0,0,0.2);
+}}
+
 h2 {{
-    font-size: 28px;
+    font-size: 26px;
 }}
 
 input {{
     width: 90%;
     padding: 15px;
-    font-size: 20px;
+    font-size: 18px;
     margin-bottom: 10px;
 }}
 
 button {{
     width: 95%;
     padding: 15px;
-    font-size: 22px;
-    background-color: #28a745;
+    font-size: 20px;
+    background: #28a745;
     color: white;
     border: none;
     border-radius: 10px;
@@ -245,29 +261,30 @@ li {{
     background: #f2f2f2;
     margin: 5px 0;
     padding: 15px;
-    font-size: 20px;
+    font-size: 18px;
     border-radius: 8px;
 }}
 
-li:hover {{
-    background: #ddd;
-}}
 </style>
 </head>
 
 <body>
 
-<h2>Confirmar Presença</h2>
+<div class="card">
+
+<h2>📚 Confirmar Presença</h2>
 
 <input type="text" id="busca" placeholder="Digite seu nome..." onkeyup="buscar()">
 
 <ul id="lista"></ul>
 
-<form method="post">
+<form method="post" onsubmit="bloquear()">
     <input name="codigo" id="codigo" placeholder="Matrícula">
     <br><br>
-    <button>Confirmar Presença</button>
+    <button id="btn">Confirmar Presença</button>
 </form>
+
+</div>
 
 <script>
 async function buscar() {{
@@ -292,6 +309,11 @@ async function buscar() {{
 
         lista.appendChild(li);
     }});
+}}
+
+function bloquear() {{
+    document.getElementById("btn").disabled = true;
+    document.getElementById("btn").innerText = "Registrando...";
 }}
 </script>
 
