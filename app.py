@@ -204,43 +204,100 @@ def aula(aula_id):
         return resp
 
     return f"""
-    <h2>Confirmar Presença</h2>
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+body {{
+    font-family: Arial;
+    text-align: center;
+    padding: 20px;
+}}
 
-    <input type="text" id="busca" placeholder="Digite seu nome..." onkeyup="buscar()"><br><br>
+h2 {{
+    font-size: 28px;
+}}
 
-    <ul id="lista"></ul>
+input {{
+    width: 90%;
+    padding: 15px;
+    font-size: 20px;
+    margin-bottom: 10px;
+}}
 
-    <form method="post">
-        Matrícula: <input name="codigo" id="codigo"><br><br>
-        <button>Confirmar</button>
-    </form>
+button {{
+    width: 95%;
+    padding: 15px;
+    font-size: 22px;
+    background-color: #28a745;
+    color: white;
+    border: none;
+    border-radius: 10px;
+}}
 
-    <script>
-    async function buscar() {{
-        let termo = document.getElementById("busca").value;
+ul {{
+    list-style: none;
+    padding: 0;
+}}
 
-        if (termo.length < 2) return;
+li {{
+    background: #f2f2f2;
+    margin: 5px 0;
+    padding: 15px;
+    font-size: 20px;
+    border-radius: 8px;
+}}
 
-        let res = await fetch('/buscar_aluno/{turma_id}?q=' + termo);
-        let data = await res.json();
+li:hover {{
+    background: #ddd;
+}}
+</style>
+</head>
 
-        let lista = document.getElementById("lista");
-        lista.innerHTML = "";
+<body>
 
-        data.dados.forEach(item => {{
-            let li = document.createElement("li");
-            li.innerText = item[1];
+<h2>Confirmar Presença</h2>
 
-            li.onclick = function() {{
-                document.getElementById("codigo").value = item[0];
-                lista.innerHTML = "";
-            }}
+<input type="text" id="busca" placeholder="Digite seu nome..." onkeyup="buscar()">
 
-            lista.appendChild(li);
-        }});
-    }}
-    </script>
-    """
+<ul id="lista"></ul>
+
+<form method="post">
+    <input name="codigo" id="codigo" placeholder="Matrícula">
+    <br><br>
+    <button>Confirmar Presença</button>
+</form>
+
+<script>
+async function buscar() {{
+    let termo = document.getElementById("busca").value;
+
+    if (termo.length < 2) return;
+
+    let res = await fetch('/buscar_aluno/{turma_id}?q=' + termo);
+    let data = await res.json();
+
+    let lista = document.getElementById("lista");
+    lista.innerHTML = "";
+
+    data.dados.forEach(item => {{
+        let li = document.createElement("li");
+        li.innerText = item[1];
+
+        li.onclick = function() {{
+            document.getElementById("codigo").value = item[0];
+            lista.innerHTML = "";
+        }}
+
+        lista.appendChild(li);
+    }});
+}}
+</script>
+
+</body>
+</html>
+"""
 
 # -------- FALTANTES --------
 @app.route("/faltantes/<aula_id>")
