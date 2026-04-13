@@ -150,6 +150,8 @@ def iniciar(turma_id):
     """
 
 # -------- ALUNO --------
+from flask import make_response
+
 @app.route("/aula/<aula_id>", methods=["GET", "POST"])
 def aula(aula_id):
 
@@ -157,16 +159,33 @@ def aula(aula_id):
     turma_id = cursor.fetchone()[0]
 
     dispositivo = request.cookies.get("device_id") or str(uuid.uuid4())
+    codigo_salvo = request.cookies.get("codigo_aluno")
 
+    # 👉 AUTO PRESENÇA (se já tiver matrícula salva)
+    if codigo_salvo:
+        cursor.execute("SELECT 1 FROM alunos WHERE codigo=? AND turma_id=?", (codigo_salvo, turma_id))
+        if cursor.fetchone():
+
+            cursor.execute("SELECT 1 FROM presenca WHERE codigo=? AND aula_id=?", (codigo_salvo, aula_id))
+            if not cursor.fetchone():
+
+                cursor.execute("INSERT INTO presenca VALUES (?, ?, ?)",
+                               (codigo_salvo, aula_id, dispositivo))
+                conn.commit()
+
+            return f"""
+            <h2>Presença registrada automaticamente ✅</h2>
+            <p>Matrícula: {codigo_salvo}</p>
+            """
+
+    # 👉 PRIMEIRO ACESSO (ou fallback)
     if request.method == "POST":
         codigo = request.form["codigo"]
 
-        # valida turma
         cursor.execute("SELECT 1 FROM alunos WHERE codigo=? AND turma_id=?", (codigo, turma_id))
         if not cursor.fetchone():
             return "Aluno não pertence à turma!"
 
-        # bloqueio dispositivo
         cursor.execute("SELECT codigo FROM dispositivos WHERE dispositivo=?", (dispositivo,))
         r = cursor.fetchone()
 
@@ -175,17 +194,59 @@ def aula(aula_id):
 
         cursor.execute("INSERT OR IGNORE INTO dispositivos VALUES (?, ?)", (dispositivo, codigo))
 
-        cursor.execute("INSERT INTO presenca VALUES (?, ?, ?)", (codigo, aula_id, dispositivo))
+        cursor.execute("INSERT INTO presenca VALUES (?, ?, ?)",
+                       (codigo, aula_id, dispositivo))
+
         conn.commit()
 
-        return "Presença confirmada!"
+        resp = make_response(f"""
+        <h2>Presença confirmada ✅</h2>
+        <p>Matrícula: {codigo}</p>
+        """)
 
-    return """
+        # 👉 SALVA NO CELULAR
+        resp.set_cookie("codigo_aluno", codigo, max_age=60*60*24*365)
+
+        return resp
+
+    # 👉 TELA COM BUSCA (continua igual)
+    return f"""
     <h2>Confirmar Presença</h2>
+
+    <input type="text" id="busca" placeholder="Digite seu nome..." onkeyup="buscar()"><br><br>
+
+    <ul id="lista"></ul>
+
     <form method="post">
-        Matrícula: <input name="codigo">
+        Matrícula: <input name="codigo" id="codigo"><br><br>
         <button>Confirmar</button>
     </form>
+
+    <script>
+    async function buscar() {{
+        let termo = document.getElementById("busca").value;
+
+        if (termo.length < 2) return;
+
+        let res = await fetch(`/buscar_aluno/{turma_id}?q=` + termo);
+        let data = await res.json();
+
+        let lista = document.getElementById("lista");
+        lista.innerHTML = "";
+
+        data.dados.forEach(item => {{
+            let li = document.createElement("li");
+            li.innerText = item[1];
+
+            li.onclick = function() {{
+                document.getElementById("codigo").value = item[0];
+                lista.innerHTML = "";
+            }}
+
+            lista.appendChild(li);
+        }});
+    }}
+    </script>
     """
 
 # -------- EXPORTAR FALTANTES --------
@@ -228,3 +289,26 @@ def presencas(aula_id):
     """, (aula_id,)).fetchall()
 
     return {"dados": dados}
+
+#-------------#
+
+import os
+port = int(os.environ.get("PORT", 10000))
+app.run(host="0.0.0.0", port=port)
+
+# -------- CRIAR ROTA DE BUSCA-----------#
+@app.route("/buscar_aluno/<int:turma_id>")
+def buscar_aluno(turma_id):
+
+    termo = request.args.get("q", "").upper()
+
+    dados = cursor.execute("""
+    SELECT codigo, nome
+    FROM alunos
+    WHERE turma_id = ?
+    AND nome LIKE ?
+    LIMIT 10
+    """, (turma_id, f"%{termo}%")).fetchall()
+
+    return {"dados": dados}
+
