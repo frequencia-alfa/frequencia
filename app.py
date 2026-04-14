@@ -5,6 +5,7 @@ import base64
 import io
 import os
 import sqlite3
+import unicodedata
 import uuid
 
 import pandas as pd
@@ -341,6 +342,27 @@ def first_existing_value(row, column_names):
     return ""
 
 
+def normalize_column_name(value):
+    if value is None:
+        return ""
+    text = str(value).strip().lower()
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(char for char in text if not unicodedata.combining(char))
+    return " ".join(text.split())
+
+
+def first_existing_value_normalized(row, aliases):
+    normalized_map = {normalize_column_name(column): column for column in row.index}
+    for alias in aliases:
+        source_column = normalized_map.get(normalize_column_name(alias))
+        if source_column is None:
+            continue
+        value = str(row.get(source_column, "")).strip()
+        if value:
+            return value
+    return ""
+
+
 def ensure_device_binding(dispositivo, codigo):
     existing = conn.execute(
         "SELECT codigo FROM dispositivos WHERE dispositivo = ?",
@@ -579,10 +601,13 @@ def importar(alocacao_id):
         inserted = 0
         updated = 0
         for _, row in df.iterrows():
-            nome = first_existing_value(row, ["Nome do Aluno", "Aluno", "Nome"])
-            codigo = first_existing_value(
+            nome = first_existing_value_normalized(
                 row,
-                ["Codigo", "Cód.", "CÃ³digo", "Matricula", "Matrícula"],
+                ["Nome do Aluno", "Aluno", "Nome"],
+            )
+            codigo = first_existing_value_normalized(
+                row,
+                ["Codigo", "Código", "Cod.", "Cód.", "Matricula", "Matrícula"],
             )
 
             if not nome or nome.lower() == "nan" or not codigo or codigo.lower() == "nan":
