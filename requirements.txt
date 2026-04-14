@@ -2,3 +2,5 @@ flask
 pandas
 openpyxl
 qrcode[pil]
+gunicorn
+psycopg2-binary
