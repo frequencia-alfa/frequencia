@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+    <h2>Relatorio da Aula</h2>
+    <p>Turma: <strong>{{ aula["turma_codigo"] }}</strong></p>
+    <p>Disciplina: <strong>{{ aula["disciplina_nome"] }}</strong></p>
+    <p>Data: <strong>{{ aula["data"] }}</strong></p>
+</section>
+
+<section class="stats-grid">
+    <article class="stat-card">
+        <span>Total</span>
+        <strong>{{ resumo["total"] }}</strong>
+    </article>
+    <article class="stat-card">
+        <span>Presentes</span>
+        <strong>{{ resumo["presentes"] }}</strong>
+    </article>
+    <article class="stat-card">
+        <span>Faltantes</span>
+        <strong>{{ resumo["faltantes"] }}</strong>
+    </article>
+    <article class="stat-card">
+        <span>Presenca</span>
+        <strong>{{ resumo["perc"] }}%</strong>
+    </article>
+</section>
+
+<section class="panel">
+    <table>
+        <thead>
+            <tr>
+                <th>Matricula</th>
+                <th>Aluno</th>
+                <th>Horario</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if presentes %}
+                {% for row in presentes %}
+                <tr>
+                    <td>{{ row["codigo"] }}</td>
+                    <td>{{ row["nome"] }}</td>
+                    <td>{{ row["registrado_em"] }}</td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="3">Nenhuma presenca registrada.</td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero">
+    <div>
+        <p class="eyebrow">Chamada por QR com vinculo professor-disciplina-turma</p>
+        <h2>Organize a frequencia da turma em poucos passos.</h2>
+        <p>Cadastre a estrutura academica, importe a lista dos alunos e abra a aula com QR temporario para presenca no celular.</p>
+    </div>
+</section>
+
+<section class="stats-grid">
+    {% for label, value in stats.items() %}
+    <article class="stat-card">
+        <span>{{ label|capitalize }}</span>
+        <strong>{{ value }}</strong>
+    </article>
+    {% endfor %}
+</section>
+
+<section class="panel">
+    <h3>Fluxo sugerido</h3>
+    <ol class="steps">
+        <li>Cadastre professor, disciplina e turma.</li>
+        <li>Faca login como professor.</li>
+        <li>Crie a alocacao da disciplina na turma.</li>
+        <li>Importe a lista de alunos.</li>
+        <li>Inicie a aula e exiba o QR code.</li>
+    </ol>
+    {% if not professor %}
+    <div class="actions">
+        <a class="button" href="{{ url_for('login') }}">Entrar</a>
+        <a class="button button-secondary" href="{{ url_for('novo_professor') }}">Cadastrar professor</a>
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

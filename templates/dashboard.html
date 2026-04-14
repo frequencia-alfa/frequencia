@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+    <h2>Aulas do Professor</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Turma</th>
+                <th>Disciplina</th>
+                <th>Data</th>
+                <th>Status</th>
+                <th>Acoes</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if aulas %}
+                {% for aula in aulas %}
+                <tr>
+                    <td>{{ aula["turma_codigo"] }}</td>
+                    <td>{{ aula["disciplina_nome"] }}</td>
+                    <td>{{ aula["data"] }}</td>
+                    <td>{{ aula["status_label"] }}</td>
+                    <td>
+                        <a href="{{ url_for('relatorio', aula_id=aula['id']) }}">Relatorio</a>
+                        |
+                        <a href="{{ url_for('faltantes', aula_id=aula['id']) }}">Faltantes</a>
+                        {% if aula["ativa"] %}
+                        |
+                        <form method="post" action="{{ url_for('encerrar_aula', aula_id=aula['id']) }}" class="inline-form">
+                            <button type="submit" class="button-link">Encerrar</button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="5">Nenhuma aula registrada.</td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

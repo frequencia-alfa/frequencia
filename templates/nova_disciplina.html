@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel narrow">
+    <h2>Cadastrar Disciplina</h2>
+    <form method="post" class="stack-form">
+        <input name="codigo" placeholder="Codigo da disciplina" required>
+        <input name="nome" placeholder="Nome da disciplina" required>
+        <button type="submit">Salvar</button>
+    </form>
+</section>
+{% endblock %}

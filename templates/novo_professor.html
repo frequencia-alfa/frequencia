@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel narrow">
+    <h2>Cadastrar Professor</h2>
+    <form method="post" class="stack-form">
+        <input name="nome" placeholder="Nome completo" required>
+        <input name="email" type="email" placeholder="E-mail" required>
+        <input name="senha" type="password" placeholder="Senha" required>
+        <button type="submit">Cadastrar</button>
+    </form>
+</section>
+{% endblock %}

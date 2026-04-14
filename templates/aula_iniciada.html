@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel narrow center">
+    <h2>Aula iniciada</h2>
+    <p>Turma: <strong>{{ alocacao["turma_codigo"] }}</strong></p>
+    <p>Disciplina: <strong>{{ alocacao["disciplina_nome"] }}</strong></p>
+    <p>QR valido ate <code>{{ expira_em }}</code>.</p>
+    <img src="data:image/png;base64,{{ img }}" alt="QR da aula" class="qr-image">
+    <p><a href="{{ link }}">{{ link }}</a></p>
+    <div class="actions center-actions">
+        <a class="button" href="{{ url_for('relatorio', aula_id=aula_id) }}">Acompanhar relatorio</a>
+        <a class="button button-secondary" href="{{ url_for('dashboard') }}">Voltar ao dashboard</a>
+    </div>
+</section>
+{% endblock %}

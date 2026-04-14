@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel narrow">
+    <h2>Confirmar Presenca</h2>
+    <p>Turma: <strong>{{ aula["turma_codigo"] }}</strong></p>
+    <p>Disciplina: <strong>{{ aula["disciplina_nome"] }}</strong></p>
+    <p>Digite sua matricula ou busque seu nome para preencher o campo automaticamente.</p>
+
+    <input id="busca" onkeyup="buscarAluno()" placeholder="Buscar por nome">
+    <ul id="lista" class="search-results"></ul>
+
+    <form method="post" class="stack-form">
+        <input id="codigo" name="codigo" placeholder="Matricula" required>
+        <button type="submit">Confirmar presenca</button>
+    </form>
+</section>
+
+<script>
+async function buscarAluno() {
+    const termo = document.getElementById("busca").value;
+    const resposta = await fetch("/buscar_aluno/{{ aula['turma_id'] }}?q=" + encodeURIComponent(termo));
+    const dados = await resposta.json();
+    const lista = document.getElementById("lista");
+    lista.innerHTML = "";
+    dados.dados.forEach((item) => {
+        const li = document.createElement("li");
+        li.textContent = item.nome + " (" + item.codigo + ")";
+        li.onclick = () => {
+            document.getElementById("codigo").value = item.codigo;
+        };
+        lista.appendChild(li);
+    });
+}
+</script>
+{% endblock %}

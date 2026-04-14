@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+    <h2>Alocacoes do Professor</h2>
+    <p>Professor logado: <strong>{{ professor["nome"] }}</strong></p>
+
+    <form method="post" class="stack-form">
+        <select name="disciplina_id" required>
+            {% for disciplina in disciplinas %}
+            <option value="{{ disciplina['id'] }}">{{ disciplina['codigo'] }} - {{ disciplina['nome'] }}</option>
+            {% endfor %}
+        </select>
+        <select name="turma_id" required>
+            {% for turma in turmas %}
+            <option value="{{ turma['id'] }}">{{ turma['codigo'] }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit">Vincular disciplina a turma</button>
+    </form>
+    <p class="helper">A importacao de alunos e a abertura de aula ficam disponiveis para cada alocacao cadastrada.</p>
+</section>
+
+<section class="panel">
+    <table>
+        <thead>
+            <tr>
+                <th>Turma</th>
+                <th>Disciplina</th>
+                <th>Nome</th>
+                <th>Acoes</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if alocacoes_rows %}
+                {% for row in alocacoes_rows %}
+                <tr>
+                    <td>{{ row["turma_codigo"] }}</td>
+                    <td>{{ row["disciplina_codigo"] }}</td>
+                    <td>{{ row["disciplina_nome"] }}</td>
+                    <td>
+                        <a href="{{ url_for('importar', alocacao_id=row['id']) }}">Importar alunos</a>
+                        |
+                        <a href="{{ url_for('iniciar', alocacao_id=row['id']) }}">Iniciar aula</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="4">Nenhuma alocacao cadastrada.</td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

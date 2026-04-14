@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel narrow">
+    <h2>Importar Alunos</h2>
+    <p>Turma: <strong>{{ alocacao["turma_codigo"] }}</strong></p>
+    <p>Disciplina vinculada: <strong>{{ alocacao["disciplina_nome"] }}</strong></p>
+    <p class="helper">A planilha pode usar colunas como Nome do Aluno, Nome, Codigo, Cód., Matricula ou Matrícula.</p>
+    <form method="post" enctype="multipart/form-data" class="stack-form">
+        <input type="file" name="file" accept=".xlsx,.xls" required>
+        <button type="submit">Importar planilha</button>
+    </form>
+</section>
+{% endblock %}
