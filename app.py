@@ -33,6 +33,18 @@ cursor.execute("CREATE TABLE IF NOT EXISTS presenca (codigo TEXT, aula_id TEXT, 
 cursor.execute("CREATE TABLE IF NOT EXISTS dispositivos (dispositivo TEXT PRIMARY KEY, codigo TEXT)")
 conn.commit()
 
+# -------- LOGO --------
+@app.route("/logo")
+def logo():
+    return send_file("logo.png", mimetype="image/png")
+
+def topo():
+    return """
+    <div style="text-align:center;">
+        <img src="/logo" width="200"><br>
+    </div>
+    """
+
 # -------- LOGIN --------
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -49,13 +61,14 @@ def login():
         session["professor"] = prof[0]
         return redirect("/")
 
-    return """
-    <h2>Login Professor</h2>
+    return topo() + """
+    <h2 style="text-align:center;">Login Professor</h2>
+    <div style="text-align:center;">
     <form method="post">
         Nome: <input name="nome">
         <button>Entrar</button>
     </form>
-    <br><a href="/">🏠 Voltar</a>
+    </div>
     """
 
 # -------- HOME --------
@@ -64,39 +77,36 @@ def home():
     prof = session.get("professor")
 
     if not prof:
-        return """
-        <h2>Controle UNIALFA</h2>
-        <a href="/login">🔐 Login</a>
+        return topo() + """
+        <h2 style="text-align:center;">Controle UNIALFA</h2>
+        <div style="text-align:center;">
+            <a href="/login">🔐 Login</a>
+        </div>
         """
 
     turmas = cursor.execute("SELECT * FROM turmas WHERE professor_id=?", (prof,)).fetchall()
 
-    html = """
-    <h2>Controle UNIALFA</h2>
-    <a href="/nova_turma">Turma</a> |
-    <a href="/nova_disciplina">Disciplina</a> |
-    <a href="/novo_professor">Professor</a> |
-    <a href="/desvincular">Desvincular</a>
-    <br><br>
+    html = topo() + """
+    <h2 style="text-align:center;">Controle UNIALFA</h2>
+
+    <div style="text-align:center;">
+        <a href="/nova_turma">Turma</a> |
+        <a href="/nova_disciplina">Disciplina</a> |
+        <a href="/desvincular">Desvincular</a>
+    </div><br>
     """
 
     for t in turmas:
         html += f"""
+        <div style="text-align:center;">
         <b>{t[1]}</b><br>
         <a href="/importar/{t[0]}">Importar</a> |
-        <a href="/iniciar/{t[0]}">Iniciar Aula</a><br><br>
+        <a href="/iniciar/{t[0]}">Iniciar Aula</a>
+        <br><br>
+        </div>
         """
 
     return html
-
-# -------- PROFESSOR --------
-@app.route("/novo_professor", methods=["GET","POST"])
-def novo_professor():
-    if request.method=="POST":
-        cursor.execute("INSERT INTO professores (nome) VALUES (?)",(request.form["nome"],))
-        conn.commit()
-        return redirect("/")
-    return '<h2>Novo Professor</h2><form method="post">Nome:<input name="nome"><button>Cadastrar</button></form><br><a href="/">🏠 Voltar</a>'
 
 # -------- DISCIPLINA --------
 @app.route("/nova_disciplina", methods=["GET","POST"])
@@ -106,7 +116,14 @@ def nova_disciplina():
                        (request.form["codigo"],request.form["nome"]))
         conn.commit()
         return redirect("/")
-    return '<h2>Nova Disciplina</h2><form method="post">Código:<input name="codigo"> Nome:<input name="nome"><button>Cadastrar</button></form><br><a href="/">🏠 Voltar</a>'
+    return topo() + '''
+    <h2>Nova Disciplina</h2>
+    <form method="post">
+    Código:<input name="codigo"><br>
+    Nome:<input name="nome"><br>
+    <button>Cadastrar</button>
+    </form>
+    '''
 
 # -------- TURMA --------
 @app.route("/nova_turma", methods=["GET","POST"])
@@ -116,7 +133,13 @@ def nova_turma():
                        (request.form["codigo"], session.get("professor")))
         conn.commit()
         return redirect("/")
-    return '<h2>Nova Turma</h2><form method="post">Código:<input name="codigo"><button>Cadastrar</button></form><br><a href="/">🏠 Voltar</a>'
+    return topo() + '''
+    <h2>Nova Turma</h2>
+    <form method="post">
+    Código:<input name="codigo">
+    <button>Cadastrar</button>
+    </form>
+    '''
 
 # -------- DESVINCULAR --------
 @app.route("/desvincular", methods=["GET","POST"])
@@ -124,8 +147,14 @@ def desvincular():
     if request.method=="POST":
         cursor.execute("DELETE FROM dispositivos WHERE codigo=?", (request.form["codigo"],))
         conn.commit()
-        return "Vínculo removido!<br><a href='/'>🏠 Voltar</a>"
-    return '<h2>Desvincular</h2><form method="post">Matrícula:<input name="codigo"><button>Remover</button></form><br><a href="/">🏠 Voltar</a>'
+        return topo() + "Vínculo removido!<br><a href='/'>Voltar</a>"
+    return topo() + '''
+    <h2>Desvincular</h2>
+    <form method="post">
+    Matrícula:<input name="codigo">
+    <button>Remover</button>
+    </form>
+    '''
 
 # -------- IMPORTAR --------
 @app.route("/importar/<int:turma_id>", methods=["GET","POST"])
@@ -141,9 +170,15 @@ def importar(turma_id):
                 cursor.execute("INSERT INTO alunos VALUES (?,?,?)",(codigo,nome,turma_id))
 
         conn.commit()
-        return "Importado!<br><a href='/'>🏠 Voltar</a>"
+        return topo() + "Importado com sucesso!<br><a href='/'>Voltar</a>"
 
-    return '<h2>Importar</h2><form method="post" enctype="multipart/form-data"><input type="file" name="file"><button>Importar</button></form><br><a href="/">🏠 Voltar</a>'
+    return topo() + '''
+    <h2>Importar Alunos</h2>
+    <form method="post" enctype="multipart/form-data">
+        <input type="file" name="file">
+        <button>Importar</button>
+    </form>
+    '''
 
 # -------- INICIAR AULA --------
 @app.route("/iniciar/<int:turma_id>", methods=["GET","POST"])
@@ -171,7 +206,7 @@ def iniciar(turma_id):
         prof = cursor.execute("SELECT nome FROM professores WHERE id=?",
                               (session.get("professor"),)).fetchone()[0]
 
-        return f"""
+        return topo() + f"""
         <h2>Aula em andamento</h2>
         <b>Professor:</b> {prof}<br>
         <b>Disciplina:</b> {disc}<br><br>
@@ -203,10 +238,10 @@ def iniciar(turma_id):
 
     disciplinas = cursor.execute("SELECT id,nome FROM disciplinas").fetchall()
 
-    form = "<h2>Iniciar Aula</h2><form method='post'>Disciplina:<select name='disciplina'>"
+    form = topo() + "<h2>Iniciar Aula</h2><form method='post'>Disciplina:<select name='disciplina'>"
     for d in disciplinas:
         form += f"<option value='{d[0]}'>{d[1]}</option>"
-    form += "</select><br><button>Iniciar</button></form><br><a href='/'>🏠 Voltar</a>"
+    form += "</select><br><button>Iniciar</button></form>"
 
     return form
 
@@ -235,7 +270,7 @@ def aula(aula_id):
     if codigo_salvo:
         cursor.execute("INSERT INTO presenca VALUES (?,?,?)",(codigo_salvo,aula_id,dispositivo))
         conn.commit()
-        return "<h2 style='color:red'>Presença automática</h2>"
+        return "<h2 style='color:red;text-align:center'>Presença automática</h2>"
 
     if request.method=="POST":
         codigo=request.form["codigo"]
@@ -244,19 +279,28 @@ def aula(aula_id):
         cursor.execute("INSERT INTO presenca VALUES (?,?,?)",(codigo,aula_id,dispositivo))
         conn.commit()
 
-        resp=make_response("<h2 style='color:red'>Confirmado</h2>")
+        resp=make_response("<h2 style='color:red;text-align:center'>Confirmado</h2>")
         resp.set_cookie("codigo",codigo)
         resp.set_cookie("device",dispositivo)
         return resp
 
     return f"""
-    <body style="background:#b30000;color:white;text-align:center">
+    <body style="background:#b30000;color:white;text-align:center;font-family:Arial">
+
+    {topo()}
+
     <h2>Presença UNIALFA</h2>
-    <input id="busca" onkeyup="buscar()" placeholder="Digite seu nome">
-    <ul id="lista"></ul>
+
+    <input id="busca" onkeyup="buscar()" placeholder="Digite seu nome"
+    style="padding:10px;width:80%;border-radius:8px;border:none"><br><br>
+
+    <ul id="lista" style="list-style:none;padding:0;"></ul>
+
     <form method="post">
-        <input id="codigo" name="codigo">
-        <button>Confirmar</button>
+        <input id="codigo" name="codigo" style="padding:10px;width:80%;border-radius:8px;border:none"><br><br>
+        <button style="padding:15px;width:80%;background:white;color:#b30000;border:none;border-radius:10px;font-size:18px;">
+            Confirmar Presença
+        </button>
     </form>
 
     <script>
@@ -270,6 +314,7 @@ def aula(aula_id):
         d.dados.forEach(x=>{{
             let li=document.createElement("li");
             li.innerText=x[1];
+            li.style="padding:10px;background:white;color:#b30000;margin:5px;border-radius:8px;";
             li.onclick=()=>document.getElementById("codigo").value=x[0];
             l.appendChild(li);
         }});
