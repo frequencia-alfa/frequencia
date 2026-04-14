@@ -1,298 +1,910 @@
-from flask import Flask, request, redirect, send_file, make_response, session
-import sqlite3
-import pandas as pd
-import uuid
-from datetime import datetime
-import io
-import qrcode
-import base64
+from datetime import datetime, timedelta
 from io import BytesIO
+import base64
+import io
 import os
+import sqlite3
+import uuid
+
+import pandas as pd
+import qrcode
+from flask import Flask, jsonify, make_response, redirect, render_template, request, send_file, session, url_for
+from werkzeug.security import check_password_hash, generate_password_hash
+
+try:
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+except ImportError:
+    psycopg2 = None
+    RealDictCursor = None
+
 
 app = Flask(__name__)
-app.secret_key = "123456"
+app.secret_key = os.environ.get("SECRET_KEY", "troque-esta-chave-em-producao")
+DATABASE_URL = os.environ.get("DATABASE_URL")
+DATABASE_PATH = os.environ.get("DATABASE_PATH", "banco.db")
+AULA_EXPIRATION_MINUTES = int(os.environ.get("AULA_EXPIRATION_MINUTES", "15"))
 
-# -------- BANCO --------
-conn = sqlite3.connect("banco.db", check_same_thread=False)
-cursor = conn.cursor()
 
-cursor.execute("CREATE TABLE IF NOT EXISTS professores (id INTEGER PRIMARY KEY, nome TEXT)")
-cursor.execute("CREATE TABLE IF NOT EXISTS disciplinas (id INTEGER PRIMARY KEY, codigo TEXT, nome TEXT)")
-cursor.execute("CREATE TABLE IF NOT EXISTS turmas (id INTEGER PRIMARY KEY, codigo TEXT)")
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS aulas (
-    id TEXT,
-    turma_id INTEGER,
-    disciplina_id INTEGER,
-    professor_id INTEGER,
-    data TEXT
-)
-""")
-cursor.execute("CREATE TABLE IF NOT EXISTS alunos (codigo TEXT, nome TEXT, turma_id INTEGER)")
-cursor.execute("CREATE TABLE IF NOT EXISTS presenca (codigo TEXT, aula_id TEXT, dispositivo TEXT)")
-cursor.execute("CREATE TABLE IF NOT EXISTS dispositivos (dispositivo TEXT PRIMARY KEY, codigo TEXT)")
-conn.commit()
+class Database:
+    def __init__(self):
+        self.backend = "postgres" if DATABASE_URL else "sqlite"
+        self.conn = self._connect()
 
-# -------- HOME --------
-@app.route("/")
-def home():
-    turmas = cursor.execute("SELECT * FROM turmas").fetchall()
+    def _connect(self):
+        if self.backend == "postgres":
+            if psycopg2 is None:
+                raise RuntimeError("psycopg2-binary nao instalado para uso com PostgreSQL.")
+            dsn = self._normalize_postgres_url(DATABASE_URL)
+            return psycopg2.connect(dsn, cursor_factory=RealDictCursor)
 
-    html = """
-    <h2>Controle UNIALFA</h2>
-    <a href="/login">Login</a> |
-    <a href="/novo_professor">Professor</a> |
-    <a href="/nova_disciplina">Disciplina</a> |
-    <a href="/nova_turma">Turma</a> |
-    <a href="/desvincular">Desvincular</a>
-    <br><br>
-    """
+        conn = sqlite3.connect(DATABASE_PATH, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        return conn
 
-    for t in turmas:
-        html += f"""
-        <b>{t[1]}</b><br>
-        <a href="/importar/{t[0]}">Importar</a> |
-        <a href="/iniciar/{t[0]}">Iniciar Aula</a><br><br>
+    def _normalize_postgres_url(self, database_url):
+        parsed = urlparse(database_url)
+        if parsed.scheme == "postgres":
+            return database_url.replace("postgres://", "postgresql://", 1)
+        return database_url
+
+    def _translate_query(self, query):
+        if self.backend == "postgres":
+            return query.replace("?", "%s")
+        return query
+
+    def execute(self, query, params=()):
+        cursor = self.conn.cursor()
+        cursor.execute(self._translate_query(query), params or ())
+        return cursor
+
+    def executescript(self, script):
+        if self.backend == "sqlite":
+            return self.conn.executescript(script)
+
+        for statement in script.split(";"):
+            statement = statement.strip()
+            if statement:
+                self.execute(statement)
+
+    def read_sql(self, query, params=()):
+        cursor = self.execute(query, params)
+        rows = cursor.fetchall()
+        if not rows:
+            columns = [column[0] for column in (cursor.description or [])]
+            return pd.DataFrame(columns=columns)
+
+        normalized_rows = []
+        for row in rows:
+            if isinstance(row, sqlite3.Row):
+                normalized_rows.append(dict(row))
+            else:
+                normalized_rows.append(row)
+        return pd.DataFrame(normalized_rows)
+
+    def scalar(self, query, params=()):
+        row = self.execute(query, params).fetchone()
+        if row is None:
+            return None
+        if isinstance(row, sqlite3.Row):
+            return row[0]
+        if isinstance(row, dict):
+            return next(iter(row.values()))
+        return row[0]
+
+    def commit(self):
+        self.conn.commit()
+
+    def rollback(self):
+        self.conn.rollback()
+
+    def is_postgres(self):
+        return self.backend == "postgres"
+
+
+conn = Database()
+
+
+def column_exists(table_name, column_name):
+    if conn.is_postgres():
+        exists = conn.scalar(
+            """
+            SELECT COUNT(*)
+            FROM information_schema.columns
+            WHERE table_name = ? AND column_name = ?
+            """,
+            (table_name, column_name),
+        )
+        return bool(exists)
+
+    rows = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+    return any(row["name"] == column_name for row in rows)
+
+
+def initialize_database():
+    if conn.is_postgres():
+        schema = """
+        CREATE TABLE IF NOT EXISTS professores (
+            id INTEGER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+            nome TEXT NOT NULL,
+            email TEXT UNIQUE,
+            senha_hash TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS disciplinas (
+            id INTEGER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+            codigo TEXT NOT NULL UNIQUE,
+            nome TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS turmas (
+            id INTEGER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+            codigo TEXT NOT NULL UNIQUE
+        );
+
+        CREATE TABLE IF NOT EXISTS alocacoes (
+            id INTEGER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+            professor_id INTEGER NOT NULL,
+            disciplina_id INTEGER NOT NULL,
+            turma_id INTEGER NOT NULL,
+            UNIQUE(professor_id, disciplina_id, turma_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS aulas (
+            id TEXT PRIMARY KEY,
+            turma_id INTEGER NOT NULL,
+            disciplina_id INTEGER NOT NULL,
+            professor_id INTEGER NOT NULL,
+            data TEXT NOT NULL,
+            criada_em TEXT NOT NULL,
+            expira_em TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'aberta'
+        );
+
+        CREATE TABLE IF NOT EXISTS alunos (
+            codigo TEXT NOT NULL,
+            nome TEXT NOT NULL,
+            turma_id INTEGER NOT NULL,
+            UNIQUE(codigo, turma_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS dispositivos (
+            dispositivo TEXT PRIMARY KEY,
+            codigo TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS presenca (
+            codigo TEXT NOT NULL,
+            aula_id TEXT NOT NULL,
+            dispositivo TEXT NOT NULL,
+            registrado_em TEXT NOT NULL,
+            UNIQUE(codigo, aula_id)
+        );
+        """
+    else:
+        schema = """
+        CREATE TABLE IF NOT EXISTS professores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            email TEXT UNIQUE,
+            senha_hash TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS disciplinas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            codigo TEXT NOT NULL UNIQUE,
+            nome TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS turmas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            codigo TEXT NOT NULL UNIQUE
+        );
+
+        CREATE TABLE IF NOT EXISTS alocacoes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            professor_id INTEGER NOT NULL,
+            disciplina_id INTEGER NOT NULL,
+            turma_id INTEGER NOT NULL,
+            UNIQUE(professor_id, disciplina_id, turma_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS aulas (
+            id TEXT PRIMARY KEY,
+            turma_id INTEGER NOT NULL,
+            disciplina_id INTEGER NOT NULL,
+            professor_id INTEGER NOT NULL,
+            data TEXT NOT NULL,
+            criada_em TEXT NOT NULL,
+            expira_em TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'aberta'
+        );
+
+        CREATE TABLE IF NOT EXISTS alunos (
+            codigo TEXT NOT NULL,
+            nome TEXT NOT NULL,
+            turma_id INTEGER NOT NULL,
+            UNIQUE(codigo, turma_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS dispositivos (
+            dispositivo TEXT PRIMARY KEY,
+            codigo TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS presenca (
+            codigo TEXT NOT NULL,
+            aula_id TEXT NOT NULL,
+            dispositivo TEXT NOT NULL,
+            registrado_em TEXT NOT NULL,
+            UNIQUE(codigo, aula_id)
+        );
         """
 
-    return html
+    conn.executescript(schema)
 
-# -------- LOGIN --------
+    if not column_exists("professores", "email"):
+        conn.execute("ALTER TABLE professores ADD COLUMN email TEXT")
+    if not column_exists("professores", "senha_hash"):
+        conn.execute("ALTER TABLE professores ADD COLUMN senha_hash TEXT")
+    if not column_exists("aulas", "criada_em"):
+        conn.execute("ALTER TABLE aulas ADD COLUMN criada_em TEXT")
+    if not column_exists("aulas", "expira_em"):
+        conn.execute("ALTER TABLE aulas ADD COLUMN expira_em TEXT")
+    if not column_exists("aulas", "status"):
+        conn.execute("ALTER TABLE aulas ADD COLUMN status TEXT DEFAULT 'aberta'")
+    if not column_exists("presenca", "registrado_em"):
+        conn.execute("ALTER TABLE presenca ADD COLUMN registrado_em TEXT")
+
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_alunos_codigo_turma ON alunos (codigo, turma_id)"
+    )
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_presenca_codigo_aula ON presenca (codigo, aula_id)"
+    )
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_disciplinas_codigo ON disciplinas (codigo)"
+    )
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_turmas_codigo ON turmas (codigo)"
+    )
+
+    now = datetime.utcnow().isoformat()
+    conn.execute(
+        """
+        UPDATE aulas
+        SET criada_em = COALESCE(criada_em, data || 'T00:00:00'),
+            expira_em = COALESCE(expira_em, data || 'T23:59:59'),
+            status = COALESCE(status, 'aberta')
+        """
+    )
+    conn.execute(
+        "UPDATE presenca SET registrado_em = COALESCE(registrado_em, ?)",
+        (now,),
+    )
+
+    legacy_professores = conn.execute(
+        "SELECT id, nome FROM professores WHERE (email IS NULL OR email = '')"
+    ).fetchall()
+    for professor in legacy_professores:
+        slug = professor["nome"].strip().lower().replace(" ", ".").replace("@", "")
+        email = f"{slug or 'professor'}_{professor['id']}@frequencia.local"
+        senha_hash = generate_password_hash(f"professor{professor['id']}")
+        conn.execute(
+            """
+            UPDATE professores
+            SET email = ?, senha_hash = COALESCE(senha_hash, ?)
+            WHERE id = ?
+            """,
+            (email, senha_hash, professor["id"]),
+        )
+
+    conn.commit()
+
+
+initialize_database()
+
+
+def render_message(title, message, extra=""):
+    return render_template("message.html", title=title, message=message, extra=extra)
+
+
+def professor_logado():
+    professor_id = session.get("professor_id")
+    if not professor_id:
+        return None
+    return conn.execute(
+        "SELECT id, nome, email FROM professores WHERE id = ?",
+        (professor_id,),
+    ).fetchone()
+
+
+def require_login():
+    if not professor_logado():
+        return redirect("/login")
+    return None
+
+
+def aula_ativa(aula_row):
+    try:
+        expira_em = datetime.fromisoformat(aula_row["expira_em"])
+    except (TypeError, ValueError):
+        return False
+    return aula_row["status"] == "aberta" and datetime.utcnow() <= expira_em
+
+
+def first_existing_value(row, column_names):
+    for column_name in column_names:
+        if column_name in row and str(row.get(column_name, "")).strip():
+            return str(row.get(column_name, "")).strip()
+    return ""
+
+
+def ensure_device_binding(dispositivo, codigo):
+    existing = conn.execute(
+        "SELECT codigo FROM dispositivos WHERE dispositivo = ?",
+        (dispositivo,),
+    ).fetchone()
+    if existing:
+        return existing
+
+    conn.execute(
+        "INSERT INTO dispositivos (dispositivo, codigo) VALUES (?, ?)",
+        (dispositivo, codigo),
+    )
+    return None
+
+
+@app.context_processor
+def inject_professor():
+    return {"session_professor": professor_logado()}
+
+
+@app.route("/")
+def home():
+    professor = professor_logado()
+    stats = {
+        "professores": conn.scalar("SELECT COUNT(*) FROM professores"),
+        "disciplinas": conn.scalar("SELECT COUNT(*) FROM disciplinas"),
+        "turmas": conn.scalar("SELECT COUNT(*) FROM turmas"),
+        "alunos": conn.scalar("SELECT COUNT(*) FROM alunos"),
+    }
+
+    return render_template(
+        "home.html",
+        title="Inicio",
+        professor=professor,
+        stats=stats,
+    )
+
+
+@app.route("/novo_professor", methods=["GET", "POST"])
+def novo_professor():
+    if request.method == "POST":
+        nome = request.form["nome"].strip()
+        email = request.form["email"].strip().lower()
+        senha = request.form["senha"]
+        if not nome or not email or not senha:
+            return render_message("Cadastro de Professor", "Preencha nome, e-mail e senha.")
+        try:
+            conn.execute(
+                "INSERT INTO professores (nome, email, senha_hash) VALUES (?, ?, ?)",
+                (nome, email, generate_password_hash(senha)),
+            )
+            conn.commit()
+        except sqlite3.IntegrityError:
+            return render_message("Cadastro de Professor", "Ja existe professor com esse e-mail.")
+        return redirect("/login")
+
+    return render_template("novo_professor.html", title="Cadastrar Professor")
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        nome = request.form["nome"]
-        prof = cursor.execute("SELECT id FROM professores WHERE nome=?", (nome,)).fetchone()
+        email = request.form["email"].strip().lower()
+        senha = request.form["senha"]
+        professor = conn.execute(
+            "SELECT id, nome, email, senha_hash FROM professores WHERE email = ?",
+            (email,),
+        ).fetchone()
+        if not professor or not professor["senha_hash"] or not check_password_hash(
+            professor["senha_hash"], senha
+        ):
+            return render_message("Login", "E-mail ou senha invalidos.")
+        session["professor_id"] = professor["id"]
+        return redirect("/dashboard")
 
-        if prof:
-            session["professor"] = prof[0]
-            return redirect("/dashboard")
+    return render_template("login.html", title="Login")
 
-        return "Professor não encontrado"
 
-    return """
-    <h2>Login Professor</h2>
-    <form method="post">
-        Nome: <input name="nome">
-        <button>Entrar</button>
-    </form>
-    """
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/")
 
-# -------- DASHBOARD --------
+
+@app.route("/nova_disciplina", methods=["GET", "POST"])
+def nova_disciplina():
+    if request.method == "POST":
+        codigo = request.form["codigo"].strip().upper()
+        nome = request.form["nome"].strip()
+        if not codigo or not nome:
+            return render_message("Nova Disciplina", "Preencha codigo e nome.")
+        try:
+            conn.execute(
+                "INSERT INTO disciplinas (codigo, nome) VALUES (?, ?)",
+                (codigo, nome),
+            )
+            conn.commit()
+        except sqlite3.IntegrityError:
+            return render_message("Nova Disciplina", "Ja existe disciplina com esse codigo.")
+        return redirect("/")
+
+    return render_template("nova_disciplina.html", title="Nova Disciplina")
+
+
+@app.route("/nova_turma", methods=["GET", "POST"])
+def nova_turma():
+    if request.method == "POST":
+        codigo = request.form["codigo"].strip().upper()
+        if not codigo:
+            return render_message("Nova Turma", "Informe o codigo da turma.")
+        try:
+            conn.execute("INSERT INTO turmas (codigo) VALUES (?)", (codigo,))
+            conn.commit()
+        except sqlite3.IntegrityError:
+            return render_message("Nova Turma", "Ja existe turma com esse codigo.")
+        return redirect("/")
+
+    return render_template("nova_turma.html", title="Nova Turma")
+
+
+@app.route("/alocacoes", methods=["GET", "POST"])
+def alocacoes():
+    login_redirect = require_login()
+    if login_redirect:
+        return login_redirect
+
+    professor = professor_logado()
+    if request.method == "POST":
+        disciplina_id = request.form["disciplina_id"]
+        turma_id = request.form["turma_id"]
+        try:
+            conn.execute(
+                """
+                INSERT INTO alocacoes (professor_id, disciplina_id, turma_id)
+                VALUES (?, ?, ?)
+                """,
+                (professor["id"], disciplina_id, turma_id),
+            )
+            conn.commit()
+        except sqlite3.IntegrityError:
+            return render_message("Alocacoes", "Esse vinculo ja existe para o professor.")
+        return redirect("/alocacoes")
+
+    disciplinas = conn.execute("SELECT id, codigo, nome FROM disciplinas ORDER BY nome").fetchall()
+    turmas = conn.execute("SELECT id, codigo FROM turmas ORDER BY codigo").fetchall()
+    alocacoes_rows = conn.execute(
+        """
+        SELECT a.id, d.codigo AS disciplina_codigo, d.nome AS disciplina_nome, t.codigo AS turma_codigo
+        FROM alocacoes a
+        JOIN disciplinas d ON d.id = a.disciplina_id
+        JOIN turmas t ON t.id = a.turma_id
+        WHERE a.professor_id = ?
+        ORDER BY t.codigo, d.nome
+        """,
+        (professor["id"],),
+    ).fetchall()
+
+    return render_template(
+        "alocacoes.html",
+        title="Alocacoes",
+        professor=professor,
+        disciplinas=disciplinas,
+        turmas=turmas,
+        alocacoes_rows=alocacoes_rows,
+    )
+
+
 @app.route("/dashboard")
 def dashboard():
-    if "professor" not in session:
-        return redirect("/login")
+    login_redirect = require_login()
+    if login_redirect:
+        return login_redirect
 
-    prof_id = session["professor"]
-
-    aulas = cursor.execute("""
-    SELECT au.id, t.codigo, d.nome, au.data
-    FROM aulas au
-    JOIN turmas t ON t.id = au.turma_id
-    JOIN disciplinas d ON d.id = au.disciplina_id
-    WHERE au.professor_id=?
-    ORDER BY au.data DESC
-    """, (prof_id,)).fetchall()
-
-    html = "<h2>Dashboard</h2><a href='/'>Home</a><br><br>"
-
-    for a in aulas:
-        html += f"""
-        Turma: {a[1]} | Disciplina: {a[2]} | Data: {a[3]}<br>
-        <a href='/relatorio/{a[0]}'>Relatório</a><br><br>
+    professor = professor_logado()
+    aulas = conn.execute(
         """
+        SELECT au.id, t.codigo AS turma_codigo, d.nome AS disciplina_nome, au.data, au.expira_em, au.status
+        FROM aulas au
+        JOIN turmas t ON t.id = au.turma_id
+        JOIN disciplinas d ON d.id = au.disciplina_id
+        WHERE au.professor_id = ?
+        ORDER BY au.criada_em DESC
+        """,
+        (professor["id"],),
+    ).fetchall()
 
-    return html
+    aulas_view = []
+    for aula in aulas:
+        aulas_view.append(
+            {
+                "id": aula["id"],
+                "turma_codigo": aula["turma_codigo"],
+                "disciplina_nome": aula["disciplina_nome"],
+                "data": aula["data"],
+                "status_label": "Ativa" if aula_ativa(aula) else "Encerrada",
+                "ativa": aula_ativa(aula),
+            }
+        )
 
-# -------- RELATORIO --------
+    return render_template("dashboard.html", title="Dashboard", aulas=aulas_view)
+
+
+@app.route("/importar/<int:alocacao_id>", methods=["GET", "POST"])
+def importar(alocacao_id):
+    login_redirect = require_login()
+    if login_redirect:
+        return login_redirect
+
+    professor = professor_logado()
+    alocacao = conn.execute(
+        """
+        SELECT a.id, a.turma_id, t.codigo AS turma_codigo, d.nome AS disciplina_nome
+        FROM alocacoes a
+        JOIN turmas t ON t.id = a.turma_id
+        JOIN disciplinas d ON d.id = a.disciplina_id
+        WHERE a.id = ? AND a.professor_id = ?
+        """,
+        (alocacao_id, professor["id"]),
+    ).fetchone()
+    if not alocacao:
+        return render_message("Importacao", "Alocacao nao encontrada para esse professor.")
+
+    if request.method == "POST":
+        uploaded = request.files.get("file")
+        if not uploaded or not uploaded.filename:
+            return render_message("Importacao", "Selecione um arquivo Excel.")
+
+        try:
+            df = pd.read_excel(uploaded, header=6)
+        except Exception:
+            return render_message(
+                "Importacao",
+                "Nao foi possivel ler a planilha. Verifique se o arquivo segue o modelo esperado.",
+            )
+
+        inserted = 0
+        updated = 0
+        for _, row in df.iterrows():
+            nome = first_existing_value(row, ["Nome do Aluno", "Aluno", "Nome"])
+            codigo = first_existing_value(
+                row,
+                ["Codigo", "Cód.", "CÃ³digo", "Matricula", "Matrícula"],
+            )
+
+            if not nome or nome.lower() == "nan" or not codigo or codigo.lower() == "nan":
+                continue
+
+            existing = conn.execute(
+                "SELECT 1 FROM alunos WHERE codigo = ? AND turma_id = ?",
+                (codigo, alocacao["turma_id"]),
+            ).fetchone()
+            if existing:
+                conn.execute(
+                    "UPDATE alunos SET nome = ? WHERE codigo = ? AND turma_id = ?",
+                    (nome, codigo, alocacao["turma_id"]),
+                )
+                updated += 1
+            else:
+                conn.execute(
+                    "INSERT INTO alunos (codigo, nome, turma_id) VALUES (?, ?, ?)",
+                    (codigo, nome, alocacao["turma_id"]),
+                )
+                inserted += 1
+
+        conn.commit()
+        return render_message(
+            "Importacao concluida",
+            f"Planilha processada com sucesso. Inseridos: {inserted}. Atualizados: {updated}.",
+            "<p><a href='/alocacoes'>Voltar para alocacoes</a></p>",
+        )
+
+    return render_template("importar.html", title="Importar Alunos", alocacao=alocacao)
+
+
+@app.route("/iniciar/<int:alocacao_id>", methods=["GET", "POST"])
+def iniciar(alocacao_id):
+    login_redirect = require_login()
+    if login_redirect:
+        return login_redirect
+
+    professor = professor_logado()
+    alocacao = conn.execute(
+        """
+        SELECT a.id, a.turma_id, a.disciplina_id, t.codigo AS turma_codigo, d.nome AS disciplina_nome
+        FROM alocacoes a
+        JOIN turmas t ON t.id = a.turma_id
+        JOIN disciplinas d ON d.id = a.disciplina_id
+        WHERE a.id = ? AND a.professor_id = ?
+        """,
+        (alocacao_id, professor["id"]),
+    ).fetchone()
+    if not alocacao:
+        return render_message("Iniciar Aula", "Alocacao nao encontrada para esse professor.")
+
+    alunos_total = conn.scalar(
+        "SELECT COUNT(*) FROM alunos WHERE turma_id = ?",
+        (alocacao["turma_id"],),
+    )
+    if alunos_total == 0:
+        return render_message(
+            "Iniciar Aula",
+            "Essa turma ainda nao possui alunos importados. Importe a lista antes de abrir a chamada.",
+        )
+
+    if request.method == "POST":
+        agora = datetime.utcnow()
+        aula_id = str(uuid.uuid4())
+        expira_em = agora + timedelta(minutes=AULA_EXPIRATION_MINUTES)
+        conn.execute(
+            """
+            INSERT INTO aulas (id, turma_id, disciplina_id, professor_id, data, criada_em, expira_em, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'aberta')
+            """,
+            (
+                aula_id,
+                alocacao["turma_id"],
+                alocacao["disciplina_id"],
+                professor["id"],
+                agora.strftime("%Y-%m-%d"),
+                agora.isoformat(),
+                expira_em.isoformat(),
+                ),
+        )
+        conn.commit()
+
+        link = request.host_url.rstrip("/") + "/aula/" + aula_id
+        qr = qrcode.make(link)
+        buf = BytesIO()
+        qr.save(buf)
+        img = base64.b64encode(buf.getvalue()).decode()
+
+        return render_template(
+            "aula_iniciada.html",
+            title="Aula iniciada",
+            alocacao=alocacao,
+            expira_em=expira_em.strftime("%d/%m/%Y %H:%M UTC"),
+            img=img,
+            link=link,
+            aula_id=aula_id,
+        )
+
+    return render_template(
+        "iniciar.html",
+        title="Iniciar Aula",
+        professor=professor,
+        alocacao=alocacao,
+        expiration_minutes=AULA_EXPIRATION_MINUTES,
+    )
+
+
+@app.route("/encerrar/<aula_id>", methods=["POST"])
+def encerrar_aula(aula_id):
+    login_redirect = require_login()
+    if login_redirect:
+        return login_redirect
+
+    professor = professor_logado()
+    updated = conn.execute(
+        """
+        UPDATE aulas
+        SET status = 'encerrada', expira_em = ?
+        WHERE id = ? AND professor_id = ?
+        """,
+        (datetime.utcnow().isoformat(), aula_id, professor["id"]),
+    )
+    conn.commit()
+    if updated.rowcount == 0:
+        return render_message("Encerrar Aula", "Aula nao encontrada para esse professor.")
+    return redirect(url_for("dashboard"))
+
+
+@app.route("/aula/<aula_id>", methods=["GET", "POST"])
+def aula(aula_id):
+    aula_row = conn.execute(
+        """
+        SELECT au.id, au.turma_id, au.expira_em, au.status, t.codigo AS turma_codigo, d.nome AS disciplina_nome
+        FROM aulas au
+        JOIN turmas t ON t.id = au.turma_id
+        JOIN disciplinas d ON d.id = au.disciplina_id
+        WHERE au.id = ?
+        """,
+        (aula_id,),
+    ).fetchone()
+
+    if not aula_row:
+        return render_message("Chamada", "Aula nao encontrada.")
+    if not aula_ativa(aula_row):
+        return render_message("Chamada encerrada", "O QR desta aula expirou ou ja foi encerrado.")
+
+    dispositivo = request.cookies.get("device") or str(uuid.uuid4())
+
+    if request.method == "POST":
+        codigo = request.form["codigo"].strip()
+        if not codigo:
+            return render_message("Chamada", "Informe sua matricula.")
+
+        aluno = conn.execute(
+            "SELECT codigo, nome FROM alunos WHERE codigo = ? AND turma_id = ?",
+            (codigo, aula_row["turma_id"]),
+        ).fetchone()
+        if not aluno:
+            return render_message("Chamada", "Matricula nao encontrada para esta turma.")
+
+        vinculo_dispositivo = ensure_device_binding(dispositivo, codigo)
+        if vinculo_dispositivo and vinculo_dispositivo["codigo"] != codigo:
+            return render_message(
+                "Chamada",
+                "Este dispositivo ja esta vinculado a outra matricula. Solicite desvinculacao ao professor.",
+            )
+
+        presenca_existente = conn.execute(
+            "SELECT 1 FROM presenca WHERE codigo = ? AND aula_id = ?",
+            (codigo, aula_id),
+        ).fetchone()
+        if not presenca_existente:
+            conn.execute(
+                """
+                INSERT INTO presenca (codigo, aula_id, dispositivo, registrado_em)
+                VALUES (?, ?, ?, ?)
+                """,
+                (codigo, aula_id, dispositivo, datetime.utcnow().isoformat()),
+            )
+        conn.commit()
+
+        resp = make_response(
+            render_message(
+                "Presenca confirmada",
+                f"Presenca registrada para {aluno['nome']}.",
+            )
+        )
+        resp.set_cookie("codigo", codigo, max_age=60 * 60 * 24 * 180, httponly=True, samesite="Lax")
+        resp.set_cookie("device", dispositivo, max_age=60 * 60 * 24 * 180, httponly=True, samesite="Lax")
+        return resp
+
+    return render_template("confirmar_presenca.html", title="Confirmar Presenca", aula=aula_row)
+
+
+@app.route("/buscar_aluno/<int:turma_id>")
+def buscar_aluno(turma_id):
+    termo = request.args.get("q", "").strip()
+    if len(termo) < 2:
+        return jsonify({"dados": []})
+
+    dados = conn.execute(
+        """
+        SELECT codigo, nome
+        FROM alunos
+        WHERE turma_id = ? AND nome LIKE ?
+        ORDER BY nome
+        LIMIT 20
+        """,
+        (turma_id, f"%{termo}%"),
+    ).fetchall()
+    return jsonify(
+        {"dados": [{"codigo": row["codigo"], "nome": row["nome"]} for row in dados]}
+    )
+
+
+@app.route("/desvincular", methods=["GET", "POST"])
+def desvincular():
+    login_redirect = require_login()
+    if login_redirect:
+        return login_redirect
+
+    if request.method == "POST":
+        codigo = request.form["codigo"].strip()
+        conn.execute("DELETE FROM dispositivos WHERE codigo = ?", (codigo,))
+        conn.commit()
+        return render_message("Desvinculacao", "Dispositivo removido para a matricula informada.")
+
+    return render_template("desvincular.html", title="Desvincular Dispositivo")
+
+
 @app.route("/relatorio/<aula_id>")
 def relatorio(aula_id):
-    presentes = cursor.execute("""
-    SELECT a.nome FROM presenca p
-    JOIN alunos a ON a.codigo = p.codigo
-    WHERE p.aula_id=?
-    """, (aula_id,)).fetchall()
+    login_redirect = require_login()
+    if login_redirect:
+        return login_redirect
 
-    total = cursor.execute("""
-    SELECT COUNT(*) FROM alunos a
-    JOIN aulas au ON au.turma_id = a.turma_id
-    WHERE au.id=?
-    """, (aula_id,)).fetchone()[0]
+    professor = professor_logado()
+    aula_row = conn.execute(
+        """
+        SELECT au.id, t.codigo AS turma_codigo, d.nome AS disciplina_nome, au.data
+        FROM aulas au
+        JOIN turmas t ON t.id = au.turma_id
+        JOIN disciplinas d ON d.id = au.disciplina_id
+        WHERE au.id = ? AND au.professor_id = ?
+        """,
+        (aula_id, professor["id"]),
+    ).fetchone()
+    if not aula_row:
+        return render_message("Relatorio", "Aula nao encontrada para esse professor.")
 
+    presentes = conn.execute(
+        """
+        SELECT a.codigo, a.nome, p.registrado_em
+        FROM presenca p
+        JOIN alunos a ON a.codigo = p.codigo
+        JOIN aulas au ON au.id = p.aula_id AND au.turma_id = a.turma_id
+        WHERE p.aula_id = ?
+        ORDER BY a.nome
+        """,
+        (aula_id,),
+    ).fetchall()
+    total = conn.scalar(
+        """
+        SELECT COUNT(*)
+        FROM alunos a
+        JOIN aulas au ON au.turma_id = a.turma_id
+        WHERE au.id = ?
+        """,
+        (aula_id,),
+    )
     qtd = len(presentes)
     faltas = total - qtd
     perc = int((qtd / total) * 100) if total else 0
 
-    return f"""
-    <h2>Relatório</h2>
-    Total: {total}<br>
-    Presentes: {qtd}<br>
-    Faltantes: {faltas}<br>
-    Presença: {perc}%
-    """
+    resumo = {"total": total, "presentes": qtd, "faltantes": faltas, "perc": perc}
+    return render_template(
+        "relatorio.html",
+        title="Relatorio",
+        aula=aula_row,
+        presentes=presentes,
+        resumo=resumo,
+    )
 
-# -------- PROFESSOR --------
-@app.route("/novo_professor", methods=["GET","POST"])
-def novo_professor():
-    if request.method=="POST":
-        cursor.execute("INSERT INTO professores (nome) VALUES (?)",(request.form["nome"],))
-        conn.commit()
-        return redirect("/")
-    return '<form method="post">Nome:<input name="nome"><button>Cadastrar</button></form>'
 
-# -------- DISCIPLINA --------
-@app.route("/nova_disciplina", methods=["GET","POST"])
-def nova_disciplina():
-    if request.method=="POST":
-        cursor.execute("INSERT INTO disciplinas VALUES (NULL,?,?)",
-                       (request.form["codigo"],request.form["nome"]))
-        conn.commit()
-        return redirect("/")
-    return '<form method="post">Código:<input name="codigo"> Nome:<input name="nome"><button>Cadastrar</button></form>'
-
-# -------- TURMA --------
-@app.route("/nova_turma", methods=["GET","POST"])
-def nova_turma():
-    if request.method=="POST":
-        cursor.execute("INSERT INTO turmas VALUES (NULL,?)",(request.form["codigo"],))
-        conn.commit()
-        return redirect("/")
-    return '<form method="post">Código:<input name="codigo"><button>Cadastrar</button></form>'
-
-# -------- DESVINCULAR --------
-@app.route("/desvincular", methods=["GET","POST"])
-def desvincular():
-    if request.method=="POST":
-        cursor.execute("DELETE FROM dispositivos WHERE codigo=?",(request.form["codigo"],))
-        conn.commit()
-        return "Removido!"
-    return '<form method="post">Matrícula:<input name="codigo"><button>Remover</button></form>'
-
-# -------- IMPORTAR --------
-@app.route("/importar/<int:turma_id>", methods=["GET","POST"])
-def importar(turma_id):
-    if request.method=="POST":
-        df = pd.read_excel(request.files["file"], header=6)
-        for _,row in df.iterrows():
-            nome=str(row["Nome do Aluno"]).strip()
-            codigo=str(row["Código"]).strip()
-            if nome!="nan":
-                cursor.execute("INSERT INTO alunos VALUES (?,?,?)",(codigo,nome,turma_id))
-        conn.commit()
-        return "Importado!"
-    return '<form method="post" enctype="multipart/form-data"><input type="file" name="file"><button>Importar</button></form>'
-
-# -------- INICIAR --------
-@app.route("/iniciar/<int:turma_id>", methods=["GET","POST"])
-def iniciar(turma_id):
-    if request.method=="POST":
-        aula_id=str(uuid.uuid4())
-        cursor.execute("INSERT INTO aulas VALUES (?,?,?,?,?)",
-                       (aula_id,turma_id,request.form["disciplina"],
-                        request.form["professor"],datetime.now().strftime("%Y-%m-%d")))
-        conn.commit()
-
-        link=request.host_url+"aula/"+aula_id
-        qr=qrcode.make(link)
-        buf=BytesIO()
-        qr.save(buf)
-        img=base64.b64encode(buf.getvalue()).decode()
-
-        return f"<img src='data:image/png;base64,{img}'><br><a href='/faltantes/{aula_id}'>Exportar</a>"
-
-    d=cursor.execute("SELECT id,nome FROM disciplinas").fetchall()
-    p=cursor.execute("SELECT id,nome FROM professores").fetchall()
-
-    form="<form method='post'>Disciplina:<select name='disciplina'>"
-    for x in d: form+=f"<option value='{x[0]}'>{x[1]}</option>"
-    form+="</select>Professor:<select name='professor'>"
-    for x in p: form+=f"<option value='{x[0]}'>{x[1]}</option>"
-    form+="</select><button>Iniciar</button></form>"
-    return form
-
-# -------- PRESENÇA --------
-@app.route("/aula/<aula_id>", methods=["GET","POST"])
-def aula(aula_id):
-
-    cursor.execute("SELECT turma_id FROM aulas WHERE id=?", (aula_id,))
-    turma_id = cursor.fetchone()[0]
-
-    dispositivo = request.cookies.get("device") or str(uuid.uuid4())
-    codigo_salvo = request.cookies.get("codigo")
-
-    if codigo_salvo:
-        cursor.execute("INSERT INTO presenca VALUES (?,?,?)",(codigo_salvo,aula_id,dispositivo))
-        conn.commit()
-        return "Presença automática"
-
-    if request.method=="POST":
-        codigo=request.form["codigo"]
-
-        cursor.execute("INSERT OR IGNORE INTO dispositivos VALUES (?,?)",(dispositivo,codigo))
-        cursor.execute("INSERT INTO presenca VALUES (?,?,?)",(codigo,aula_id,dispositivo))
-        conn.commit()
-
-        resp=make_response("Confirmado")
-        resp.set_cookie("codigo",codigo)
-        resp.set_cookie("device",dispositivo)
-        return resp
-
-    return f"""
-    <input id="busca" onkeyup="buscar()">
-    <ul id="lista"></ul>
-    <form method="post">
-        <input id="codigo" name="codigo">
-        <button>Confirmar</button>
-    </form>
-
-    <script>
-    async function buscar(){{
-        let t=document.getElementById("busca").value;
-        let r=await fetch('/buscar_aluno/{turma_id}?q='+t);
-        let d=await r.json();
-        let l=document.getElementById("lista");
-        l.innerHTML="";
-        d.dados.forEach(x=>{{
-            let li=document.createElement("li");
-            li.innerText=x[1];
-            li.onclick=()=>document.getElementById("codigo").value=x[0];
-            l.appendChild(li);
-        }});
-    }}
-    </script>
-    """
-
-# -------- BUSCA --------
-@app.route("/buscar_aluno/<int:turma_id>")
-def buscar_aluno(turma_id):
-    termo=request.args.get("q","")
-    dados=cursor.execute("""
-    SELECT codigo,nome FROM alunos WHERE turma_id=? AND nome LIKE ?
-    """,(turma_id,f"%{termo}%")).fetchall()
-    return {"dados":dados}
-
-# -------- EXPORTAR --------
 @app.route("/faltantes/<aula_id>")
 def faltantes(aula_id):
-    df=pd.read_sql("""
-    SELECT pr.nome,d.codigo,d.nome,a.codigo,a.nome
-    FROM alunos a
-    JOIN aulas au ON au.turma_id=a.turma_id
-    JOIN disciplinas d ON d.id=au.disciplina_id
-    JOIN professores pr ON pr.id=au.professor_id
-    WHERE au.id=? AND a.codigo NOT IN
-    (SELECT codigo FROM presenca WHERE aula_id=?)
-    ORDER BY a.nome
-    """,conn,params=(aula_id,aula_id))
+    login_redirect = require_login()
+    if login_redirect:
+        return login_redirect
 
-    df["Status"]="FALTA"
-    out=io.BytesIO()
-    df.to_excel(out,index=False)
+    professor = professor_logado()
+    aula_row = conn.execute(
+        "SELECT 1 FROM aulas WHERE id = ? AND professor_id = ?",
+        (aula_id, professor["id"]),
+    ).fetchone()
+    if not aula_row:
+        return render_message("Faltantes", "Aula nao encontrada para esse professor.")
+
+    df = conn.read_sql(
+        """
+        SELECT pr.nome AS professor,
+               d.codigo AS disciplina_codigo,
+               d.nome AS disciplina_nome,
+               a.codigo AS matricula,
+               a.nome AS aluno
+        FROM alunos a
+        JOIN aulas au ON au.turma_id = a.turma_id
+        JOIN disciplinas d ON d.id = au.disciplina_id
+        JOIN professores pr ON pr.id = au.professor_id
+        WHERE au.id = ?
+          AND a.codigo NOT IN (SELECT codigo FROM presenca WHERE aula_id = ?)
+        ORDER BY a.nome
+        """,
+        params=(aula_id, aula_id),
+    )
+    df["Status"] = "FALTA"
+    out = io.BytesIO()
+    df.to_excel(out, index=False)
     out.seek(0)
-    return send_file(out,download_name="faltantes.xlsx",as_attachment=True)
+    return send_file(out, download_name="faltantes.xlsx", as_attachment=True)
 
-# -------- RODAR --------
-if __name__=="__main__":
-    port=int(os.environ.get("PORT",10000))
-    app.run(host="0.0.0.0",port=port)
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
