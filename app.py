@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from io import BytesIO
+from urllib.parse import urlparse
 import base64
 import io
 import os
