@@ -26,6 +26,7 @@ app.secret_key = os.environ.get("SECRET_KEY", "troque-esta-chave-em-producao")
 DATABASE_URL = os.environ.get("DATABASE_URL")
 DATABASE_PATH = os.environ.get("DATABASE_PATH", "banco.db")
 AULA_EXPIRATION_MINUTES = int(os.environ.get("AULA_EXPIRATION_MINUTES", "15"))
+LOGO_PATH = os.path.join(app.root_path, "logo.png")
 
 
 class Database:
@@ -401,6 +402,11 @@ def home():
     )
 
 
+@app.route("/logo.png")
+def logo_asset():
+    return send_file(LOGO_PATH, mimetype="image/png")
+
+
 @app.route("/novo_professor", methods=["GET", "POST"])
 def novo_professor():
     if request.method == "POST":
@@ -528,6 +534,23 @@ def alocacoes():
         turmas=turmas,
         alocacoes_rows=alocacoes_rows,
     )
+
+
+@app.route("/alocacoes/remover/<int:alocacao_id>", methods=["POST"])
+def remover_alocacao(alocacao_id):
+    login_redirect = require_login()
+    if login_redirect:
+        return login_redirect
+
+    professor = professor_logado()
+    removed = conn.execute(
+        "DELETE FROM alocacoes WHERE id = ? AND professor_id = ?",
+        (alocacao_id, professor["id"]),
+    )
+    conn.commit()
+    if removed.rowcount == 0:
+        return render_message("Alocacoes", "Vinculo nao encontrado para esse professor.")
+    return redirect(url_for("alocacoes"))
 
 
 @app.route("/dashboard")
@@ -806,18 +829,31 @@ def aula(aula_id):
 @app.route("/buscar_aluno/<int:turma_id>")
 def buscar_aluno(turma_id):
     termo = request.args.get("q", "").strip()
-    if len(termo) < 2:
+    if len(termo) < 1:
         return jsonify({"dados": []})
 
     dados = conn.execute(
         """
         SELECT codigo, nome
         FROM alunos
-        WHERE turma_id = ? AND nome LIKE ?
-        ORDER BY nome
+        WHERE turma_id = ?
+          AND (nome LIKE ? OR codigo LIKE ?)
+        ORDER BY
+            CASE
+                WHEN codigo LIKE ? THEN 0
+                WHEN nome LIKE ? THEN 1
+                ELSE 2
+            END,
+            nome
         LIMIT 20
         """,
-        (turma_id, f"%{termo}%"),
+        (
+            turma_id,
+            f"%{termo}%",
+            f"%{termo}%",
+            f"{termo}%",
+            f"{termo}%",
+        ),
     ).fetchall()
     return jsonify(
         {"dados": [{"codigo": row["codigo"], "nome": row["nome"]} for row in dados]}

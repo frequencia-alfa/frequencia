@@ -10,8 +10,11 @@
     <div class="page-shell">
         <aside class="sidebar">
             <a class="brand" href="{{ url_for('home') }}">
-                <span class="brand-mark">FQ</span>
-                <span>Frequencia</span>
+                <img class="brand-logo" src="{{ url_for('logo_asset') }}" alt="UNIALFA">
+                <span class="brand-text">
+                    <strong>Frequencia</strong>
+                    <small>Controle academico</small>
+                </span>
             </a>
 
             <nav class="menu">
@@ -33,7 +36,7 @@
         <main class="content">
             <header class="topbar">
                 <div>
-                    <p class="eyebrow">Controle academico</p>
+                    <p class="eyebrow">UNIALFA</p>
                     <h1>{{ title }}</h1>
                 </div>
                 {% if session_professor %}

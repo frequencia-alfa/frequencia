@@ -5,32 +5,61 @@
     <h2>Confirmar Presenca</h2>
     <p>Turma: <strong>{{ aula["turma_codigo"] }}</strong></p>
     <p>Disciplina: <strong>{{ aula["disciplina_nome"] }}</strong></p>
-    <p>Digite sua matricula ou busque seu nome para preencher o campo automaticamente.</p>
-
-    <input id="busca" onkeyup="buscarAluno()" placeholder="Buscar por nome">
-    <ul id="lista" class="search-results"></ul>
+    <p>Digite seu nome ou matricula. As sugestoes aparecem automaticamente para facilitar no celular.</p>
 
     <form method="post" class="stack-form">
-        <input id="codigo" name="codigo" placeholder="Matricula" required>
+        <label for="busca" class="field-label">Nome ou matricula</label>
+        <input id="busca" placeholder="Comece a digitar seu nome ou matricula" autocomplete="off" required>
+        <input id="codigo" name="codigo" type="hidden" required>
+        <div id="selecionado" class="helper"></div>
+        <ul id="lista" class="search-results"></ul>
         <button type="submit">Confirmar presenca</button>
     </form>
 </section>
 
 <script>
+const buscaInput = document.getElementById("busca");
+const codigoInput = document.getElementById("codigo");
+const lista = document.getElementById("lista");
+const selecionado = document.getElementById("selecionado");
+
+function limparLista() {
+    lista.innerHTML = "";
+}
+
+function selecionarAluno(item) {
+    buscaInput.value = item.nome + " (" + item.codigo + ")";
+    codigoInput.value = item.codigo;
+    selecionado.textContent = "Selecionado: " + item.nome + " - " + item.codigo;
+    limparLista();
+}
+
 async function buscarAluno() {
-    const termo = document.getElementById("busca").value;
+    const termo = buscaInput.value.trim();
+    codigoInput.value = termo;
+    selecionado.textContent = termo ? "Matricula a enviar: " + termo : "";
+
+    if (!termo) {
+        limparLista();
+        return;
+    }
+
     const resposta = await fetch("/buscar_aluno/{{ aula['turma_id'] }}?q=" + encodeURIComponent(termo));
     const dados = await resposta.json();
-    const lista = document.getElementById("lista");
-    lista.innerHTML = "";
+    limparLista();
+
     dados.dados.forEach((item) => {
         const li = document.createElement("li");
-        li.textContent = item.nome + " (" + item.codigo + ")";
-        li.onclick = () => {
-            document.getElementById("codigo").value = item.codigo;
-        };
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "search-result-button";
+        button.innerHTML = "<strong>" + item.nome + "</strong><span>" + item.codigo + "</span>";
+        button.onclick = () => selecionarAluno(item);
+        li.appendChild(button);
         lista.appendChild(li);
     });
 }
+
+buscaInput.addEventListener("input", buscarAluno);
 </script>
 {% endblock %}
