@@ -250,6 +250,12 @@ def initialize_database():
         conn.execute("ALTER TABLE professores ADD COLUMN email TEXT")
     if not column_exists("professores", "senha_hash"):
         conn.execute("ALTER TABLE professores ADD COLUMN senha_hash TEXT")
+    if not column_exists("aulas", "turma_id"):
+        conn.execute("ALTER TABLE aulas ADD COLUMN turma_id INTEGER")
+    if not column_exists("aulas", "disciplina_id"):
+        conn.execute("ALTER TABLE aulas ADD COLUMN disciplina_id INTEGER")
+    if not column_exists("aulas", "professor_id"):
+        conn.execute("ALTER TABLE aulas ADD COLUMN professor_id INTEGER")
     if not column_exists("aulas", "criada_em"):
         conn.execute("ALTER TABLE aulas ADD COLUMN criada_em TEXT")
     if not column_exists("aulas", "expira_em"):
