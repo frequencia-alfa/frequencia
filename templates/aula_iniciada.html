@@ -5,12 +5,76 @@
     <h2>Aula iniciada</h2>
     <p>Turma: <strong>{{ alocacao["turma_codigo"] }}</strong></p>
     <p>Disciplina: <strong>{{ alocacao["disciplina_nome"] }}</strong></p>
-    <p>QR valido ate <code>{{ expira_em }}</code>.</p>
+    <p>QR válido até <code>{{ expira_em }}</code>.</p>
     <img src="data:image/png;base64,{{ img }}" alt="QR da aula" class="qr-image">
     <p><a href="{{ link }}">{{ link }}</a></p>
     <div class="actions center-actions">
-        <a class="button" href="{{ url_for('relatorio', aula_id=aula_id) }}">Acompanhar relatorio</a>
+        <a class="button" href="{{ url_for('relatorio', aula_id=aula_id) }}">Acompanhar relatório</a>
         <a class="button button-secondary" href="{{ url_for('dashboard') }}">Voltar ao dashboard</a>
     </div>
 </section>
+
+<section class="panel narrow">
+    <div class="presence-header">
+        <h3>Presenças confirmadas</h3>
+        <span id="presence-count" class="helper">0 alunos</span>
+    </div>
+    <div id="presence-empty" class="helper">Aguardando confirmações dos alunos...</div>
+    <div id="presence-list" class="presence-list"></div>
+</section>
+
+<script>
+const presenceList = document.getElementById("presence-list");
+const presenceEmpty = document.getElementById("presence-empty");
+const presenceCount = document.getElementById("presence-count");
+
+function formatHorario(isoValue) {
+    if (!isoValue) {
+        return "";
+    }
+
+    const data = new Date(isoValue);
+    if (Number.isNaN(data.getTime())) {
+        return isoValue;
+    }
+
+    return data.toLocaleTimeString("pt-BR", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        timeZone: "UTC",
+    });
+}
+
+function renderPresencas(items) {
+    presenceList.innerHTML = "";
+    presenceCount.textContent = items.length + (items.length === 1 ? " aluno" : " alunos");
+    presenceEmpty.style.display = items.length ? "none" : "block";
+
+    items.forEach((item) => {
+        const article = document.createElement("article");
+        article.className = "presence-card";
+        article.innerHTML =
+            "<div><strong>" + item.nome + "</strong><span>Matrícula: " + item.codigo + "</span></div>" +
+            "<small>" + formatHorario(item.registrado_em) + "</small>";
+        presenceList.appendChild(article);
+    });
+}
+
+async function carregarPresencas() {
+    try {
+        const resposta = await fetch("/presencas/{{ aula_id }}", { cache: "no-store" });
+        if (!resposta.ok) {
+            return;
+        }
+        const dados = await resposta.json();
+        renderPresencas(dados.dados || []);
+    } catch (erro) {
+        console.error("Falha ao atualizar presenças", erro);
+    }
+}
+
+carregarPresencas();
+setInterval(carregarPresencas, 3000);
+</script>
 {% endblock %}

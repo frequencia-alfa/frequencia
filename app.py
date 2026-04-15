@@ -767,6 +767,45 @@ def encerrar_aula(aula_id):
     return redirect(url_for("dashboard"))
 
 
+@app.route("/presencas/<aula_id>")
+def listar_presencas(aula_id):
+    login_redirect = require_login()
+    if login_redirect:
+        return jsonify({"erro": "nao_autorizado"}), 401
+
+    professor = professor_logado()
+    aula_row = conn.execute(
+        "SELECT id FROM aulas WHERE id = ? AND professor_id = ?",
+        (aula_id, professor["id"]),
+    ).fetchone()
+    if not aula_row:
+        return jsonify({"erro": "aula_nao_encontrada"}), 404
+
+    presentes = conn.execute(
+        """
+        SELECT a.codigo, a.nome, p.registrado_em
+        FROM presenca p
+        JOIN alunos a ON a.codigo = p.codigo
+        JOIN aulas au ON au.id = p.aula_id AND au.turma_id = a.turma_id
+        WHERE p.aula_id = ?
+        ORDER BY p.registrado_em DESC
+        """,
+        (aula_id,),
+    ).fetchall()
+    return jsonify(
+        {
+            "dados": [
+                {
+                    "codigo": row["codigo"],
+                    "nome": row["nome"],
+                    "registrado_em": row["registrado_em"],
+                }
+                for row in presentes
+            ]
+        }
+    )
+
+
 @app.route("/aula/<aula_id>", methods=["GET", "POST"])
 def aula(aula_id):
     aula_row = conn.execute(

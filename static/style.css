@@ -319,6 +319,45 @@ td {
     color: #a11b08;
 }
 
+.presence-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.presence-header h3 {
+    margin: 0;
+}
+
+.presence-list {
+    display: grid;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.presence-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--panel-soft);
+}
+
+.presence-card div {
+    display: grid;
+    gap: 4px;
+}
+
+.presence-card span,
+.presence-card small {
+    color: var(--muted);
+}
+
 code {
     background: var(--accent-strong);
     border-radius: 8px;
@@ -348,6 +387,12 @@ code {
     }
 
     .search-result-button {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .presence-header,
+    .presence-card {
         flex-direction: column;
         align-items: flex-start;
     }
