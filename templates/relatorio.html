@@ -2,7 +2,7 @@
 
 {% block content %}
 <section class="panel">
-    <h2>Relatorio da Aula</h2>
+    <h2>Relatório da Aula</h2>
     <p>Turma: <strong>{{ aula["turma_codigo"] }}</strong></p>
     <p>Disciplina: <strong>{{ aula["disciplina_nome"] }}</strong></p>
     <p>Data: <strong>{{ aula["data"] }}</strong></p>
@@ -22,7 +22,7 @@
         <strong>{{ resumo["faltantes"] }}</strong>
     </article>
     <article class="stat-card">
-        <span>Presenca</span>
+        <span>Presença</span>
         <strong>{{ resumo["perc"] }}%</strong>
     </article>
 </section>
@@ -31,9 +31,9 @@
     <table>
         <thead>
             <tr>
-                <th>Matricula</th>
+                <th>Matrícula</th>
                 <th>Aluno</th>
-                <th>Horario</th>
+                <th>Horário</th>
             </tr>
         </thead>
         <tbody>
@@ -47,7 +47,7 @@
                 {% endfor %}
             {% else %}
                 <tr>
-                    <td colspan="3">Nenhuma presenca registrada.</td>
+                    <td colspan="3">Nenhuma presença registrada.</td>
                 </tr>
             {% endif %}
         </tbody>

@@ -2,18 +2,18 @@
 
 {% block content %}
 <section class="panel narrow">
-    <h2>Confirmar Presenca</h2>
+    <h2>Confirmar Presença</h2>
     <p>Turma: <strong>{{ aula["turma_codigo"] }}</strong></p>
     <p>Disciplina: <strong>{{ aula["disciplina_nome"] }}</strong></p>
-    <p>Digite seu nome ou matricula. As sugestoes aparecem automaticamente para facilitar no celular.</p>
+    <p>Digite seu nome ou matrícula. As sugestões aparecem automaticamente para facilitar no celular.</p>
 
     <form method="post" class="stack-form">
-        <label for="busca" class="field-label">Nome ou matricula</label>
-        <input id="busca" placeholder="Comece a digitar seu nome ou matricula" autocomplete="off" required>
+        <label for="busca" class="field-label">Nome ou matrícula</label>
+        <input id="busca" placeholder="Comece a digitar seu nome ou matrícula" autocomplete="off" required>
         <input id="codigo" name="codigo" type="hidden" required>
         <div id="selecionado" class="helper"></div>
         <ul id="lista" class="search-results"></ul>
-        <button type="submit">Confirmar presenca</button>
+        <button type="submit">Confirmar presença</button>
     </form>
 </section>
 
@@ -37,7 +37,7 @@ function selecionarAluno(item) {
 async function buscarAluno() {
     const termo = buscaInput.value.trim();
     codigoInput.value = termo;
-    selecionado.textContent = termo ? "Matricula a enviar: " + termo : "";
+    selecionado.textContent = termo ? "Matrícula a enviar: " + termo : "";
 
     if (!termo) {
         limparLista();

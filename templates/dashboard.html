@@ -10,7 +10,7 @@
                 <th>Disciplina</th>
                 <th>Data</th>
                 <th>Status</th>
-                <th>Acoes</th>
+                <th>Ações</th>
             </tr>
         </thead>
         <tbody>
@@ -22,7 +22,7 @@
                     <td>{{ aula["data"] }}</td>
                     <td>{{ aula["status_label"] }}</td>
                     <td>
-                        <a href="{{ url_for('relatorio', aula_id=aula['id']) }}">Relatorio</a>
+                        <a href="{{ url_for('relatorio', aula_id=aula['id']) }}">Relatório</a>
                         |
                         <a href="{{ url_for('faltantes', aula_id=aula['id']) }}">Faltantes</a>
                         {% if aula["ativa"] %}

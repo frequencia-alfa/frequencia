@@ -2,7 +2,7 @@
 
 {% block content %}
 <section class="panel">
-    <h2>Alocacoes do Professor</h2>
+    <h2>Alocações do Professor</h2>
     <p>Professor logado: <strong>{{ professor["nome"] }}</strong></p>
 
     <form method="post" class="stack-form">
@@ -18,7 +18,7 @@
         </select>
         <button type="submit">Vincular disciplina a turma</button>
     </form>
-    <p class="helper">A importacao de alunos e a abertura de aula ficam disponiveis para cada alocacao cadastrada.</p>
+    <p class="helper">A importação de alunos e a abertura de aula ficam disponíveis para cada alocação cadastrada.</p>
 </section>
 
 <section class="panel">
@@ -28,7 +28,7 @@
                 <th>Turma</th>
                 <th>Disciplina</th>
                 <th>Nome</th>
-                <th>Acoes</th>
+                <th>Ações</th>
             </tr>
         </thead>
         <tbody>
@@ -51,7 +51,7 @@
                 {% endfor %}
             {% else %}
                 <tr>
-                    <td colspan="4">Nenhuma alocacao cadastrada.</td>
+                    <td colspan="4">Nenhuma alocação cadastrada.</td>
                 </tr>
             {% endif %}
         </tbody>

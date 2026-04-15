@@ -27,13 +27,15 @@
                 <a href="{{ url_for('dashboard') }}">Dashboard</a>
                 <a href="{{ url_for('alocacoes') }}">Alocações</a>
                 <a href="{{ url_for('desvincular') }}">Desvincular dispositivo</a>
-                <a href="{{ url_for('logout') }}">Sair</a>
                 {% else %}
                 <a href="{{ url_for('login') }}">Entrar</a>
                 <a href="{{ url_for('novo_professor') }}">Cadastrar professor</a>
                 {% endif %}
                 <a href="{{ url_for('nova_disciplina') }}">Nova disciplina</a>
                 <a href="{{ url_for('nova_turma') }}">Nova turma</a>
+                {% if session_professor %}
+                <a href="{{ url_for('logout') }}">Sair</a>
+                {% endif %}
             </nav>
             {% endif %}
         </aside>
