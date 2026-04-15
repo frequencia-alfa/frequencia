@@ -4,12 +4,13 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     {% set compact_view = compact_layout or request.path.startswith('/aula/') %}
+    {% set home_view = request.endpoint == 'home' %}
     <title>{{ title }} | Frequência</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
-    <div class="page-shell{% if compact_view %} compact-shell{% endif %}">
-        <aside class="sidebar{% if compact_view %} compact-sidebar{% endif %}">
+<body class="{% if home_view %}home-view{% endif %}">
+    <div class="page-shell{% if compact_view %} compact-shell{% endif %}{% if home_view %} home-shell{% endif %}">
+        <aside class="sidebar{% if compact_view %} compact-sidebar{% endif %}{% if home_view %} home-sidebar{% endif %}">
             <a class="brand{% if compact_view %} compact-brand{% endif %}" href="{{ url_for('home') }}">
                 <span class="brand-badge">
                     <img class="brand-logo" src="{{ url_for('logo_asset') }}" alt="UNIALFA">
@@ -40,7 +41,7 @@
             {% endif %}
         </aside>
 
-        <main class="content{% if compact_view %} compact-content{% endif %}">
+        <main class="content{% if compact_view %} compact-content{% endif %}{% if home_view %} home-content{% endif %}">
             {% if not compact_view %}
             <header class="topbar">
                 <div>

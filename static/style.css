@@ -102,6 +102,73 @@ a {
     padding-top: 8px;
 }
 
+.home-shell {
+    min-height: 100vh;
+}
+
+.home-sidebar {
+    padding: 22px 18px;
+}
+
+.home-content {
+    padding: 22px 28px;
+}
+
+.home-view .brand {
+    margin-bottom: 18px;
+}
+
+.home-view .menu {
+    gap: 4px;
+}
+
+.home-view .menu a {
+    padding: 8px 10px;
+}
+
+.home-view .topbar {
+    margin-bottom: 14px;
+}
+
+.home-view .hero,
+.home-view .panel {
+    padding: 18px 24px;
+    margin-bottom: 16px;
+}
+
+.home-view .hero h2 {
+    font-size: 24px;
+    line-height: 1.15;
+}
+
+.home-view .hero p,
+.home-view .panel p,
+.home-view .steps li {
+    font-size: 15px;
+}
+
+.home-view .stats-grid {
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.home-view .stat-card {
+    padding: 14px 18px;
+}
+
+.home-view .stat-card strong {
+    font-size: 24px;
+}
+
+.home-view .steps {
+    margin-top: 12px;
+}
+
+.home-view .actions,
+.home-view .center-actions {
+    margin-top: 14px;
+}
+
 .menu {
     display: grid;
     gap: 10px;
@@ -425,5 +492,15 @@ code {
 
     .compact-content {
         padding-top: 0;
+    }
+
+    .home-sidebar,
+    .home-content {
+        padding: 18px;
+    }
+
+    .home-view .hero,
+    .home-view .panel {
+        padding: 20px;
     }
 }
