@@ -573,6 +573,41 @@ def remover_alocacao(alocacao_id):
     return redirect(url_for("alocacoes"))
 
 
+@app.route("/alocacoes/limpar_alunos/<int:alocacao_id>", methods=["POST"])
+def limpar_alunos_alocacao(alocacao_id):
+    login_redirect = require_login()
+    if login_redirect:
+        return login_redirect
+
+    professor = professor_logado()
+    alocacao = conn.execute(
+        """
+        SELECT a.id, a.turma_id
+        FROM alocacoes a
+        WHERE a.id = ? AND a.professor_id = ?
+        """,
+        (alocacao_id, professor["id"]),
+    ).fetchone()
+    if not alocacao:
+        return render_message("AlocaÃ§Ãµes", "AlocaÃ§Ã£o nÃ£o encontrada para esse professor.")
+
+    codigos = [
+        row["codigo"]
+        for row in conn.execute(
+            "SELECT codigo FROM alunos WHERE turma_id = ?",
+            (alocacao["turma_id"],),
+        ).fetchall()
+    ]
+
+    for codigo in codigos:
+        conn.execute("DELETE FROM presenca WHERE codigo = ?", (codigo,))
+        conn.execute("DELETE FROM dispositivos WHERE codigo = ?", (codigo,))
+
+    conn.execute("DELETE FROM alunos WHERE turma_id = ?", (alocacao["turma_id"],))
+    conn.commit()
+    return redirect(url_for("alocacoes"))
+
+
 @app.route("/dashboard")
 def dashboard():
     login_redirect = require_login()
@@ -606,6 +641,29 @@ def dashboard():
         )
 
     return render_template("dashboard.html", title="Dashboard", aulas=aulas_view)
+
+
+@app.route("/dashboard/limpar", methods=["POST"])
+def limpar_dashboard():
+    login_redirect = require_login()
+    if login_redirect:
+        return login_redirect
+
+    professor = professor_logado()
+    aula_ids = [
+        row["id"]
+        for row in conn.execute(
+            "SELECT id FROM aulas WHERE professor_id = ?",
+            (professor["id"],),
+        ).fetchall()
+    ]
+
+    for aula_id in aula_ids:
+        conn.execute("DELETE FROM presenca WHERE aula_id = ?", (aula_id,))
+
+    conn.execute("DELETE FROM aulas WHERE professor_id = ?", (professor["id"],))
+    conn.commit()
+    return redirect(url_for("dashboard"))
 
 
 @app.route("/importar/<int:alocacao_id>", methods=["GET", "POST"])

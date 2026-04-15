@@ -3,6 +3,11 @@
 {% block content %}
 <section class="panel">
     <h2>Aulas do Professor</h2>
+    <div class="actions">
+        <form method="post" action="{{ url_for('limpar_dashboard') }}" class="inline-form">
+            <button type="submit" class="button button-secondary" onclick="return confirm('Limpar todas as aulas do dashboard deste professor?')">Limpar dashboard</button>
+        </form>
+    </div>
     <table>
         <thead>
             <tr>

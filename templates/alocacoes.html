@@ -43,6 +43,10 @@
                         |
                         <a href="{{ url_for('iniciar', alocacao_id=row['id']) }}">Iniciar aula</a>
                         |
+                        <form method="post" action="{{ url_for('limpar_alunos_alocacao', alocacao_id=row['id']) }}" class="inline-form">
+                            <button type="submit" class="button-link danger-link" onclick="return confirm('Limpar todos os alunos desta turma vinculada?')">Limpar alunos</button>
+                        </form>
+                        |
                         <form method="post" action="{{ url_for('remover_alocacao', alocacao_id=row['id']) }}" class="inline-form">
                             <button type="submit" class="button-link danger-link" onclick="return confirm('Desvincular esta disciplina da turma?')">Desvincular</button>
                         </form>
