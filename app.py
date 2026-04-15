@@ -308,8 +308,14 @@ def initialize_database():
 initialize_database()
 
 
-def render_message(title, message, extra=""):
-    return render_template("message.html", title=title, message=message, extra=extra)
+def render_message(title, message, extra="", compact_layout=False):
+    return render_template(
+        "message.html",
+        title=title,
+        message=message,
+        extra=extra,
+        compact_layout=compact_layout,
+    )
 
 
 def professor_logado():
@@ -485,6 +491,7 @@ def nova_turma():
     if request.method == "POST":
         codigo = request.form["codigo"].strip().upper()
         if not codigo:
+            return render_message("Chamada", "Informe sua matrÃ­cula.", compact_layout=True)
             return render_message("Nova Turma", "Informe o código da turma.")
         try:
             conn.execute("INSERT INTO turmas (codigo) VALUES (?)", (codigo,))
@@ -820,8 +827,13 @@ def aula(aula_id):
     ).fetchone()
 
     if not aula_row:
-        return render_message("Chamada", "Aula nao encontrada.")
+        return render_message("Chamada", "Aula nao encontrada.", compact_layout=True)
     if not aula_ativa(aula_row):
+        return render_message(
+            "Chamada encerrada",
+            "O QR desta aula expirou ou jÃ¡ foi encerrado.",
+            compact_layout=True,
+        )
         return render_message("Chamada encerrada", "O QR desta aula expirou ou já foi encerrado.")
 
     dispositivo = request.cookies.get("device") or str(uuid.uuid4())
@@ -836,10 +848,20 @@ def aula(aula_id):
             (codigo, aula_row["turma_id"]),
         ).fetchone()
         if not aluno:
+            return render_message(
+                "Chamada",
+                "Matricula nao encontrada para esta turma.",
+                compact_layout=True,
+            )
             return render_message("Chamada", "Matricula nao encontrada para esta turma.")
 
         vinculo_dispositivo = ensure_device_binding(dispositivo, codigo)
         if vinculo_dispositivo and vinculo_dispositivo["codigo"] != codigo:
+            return render_message(
+                "Chamada",
+                "Este dispositivo jÃ¡ estÃ¡ vinculado a outra matrÃ­cula. Solicite desvinculaÃ§Ã£o ao professor.",
+                compact_layout=True,
+            )
             return render_message(
                 "Chamada",
                 "Este dispositivo já está vinculado a outra matrícula. Solicite desvinculação ao professor.",

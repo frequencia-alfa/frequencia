@@ -3,13 +3,14 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    {% set compact_view = compact_layout or request.path.startswith('/aula/') %}
     <title>{{ title }} | Frequência</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <div class="page-shell">
-        <aside class="sidebar">
-            <a class="brand" href="{{ url_for('home') }}">
+    <div class="page-shell{% if compact_view %} compact-shell{% endif %}">
+        <aside class="sidebar{% if compact_view %} compact-sidebar{% endif %}">
+            <a class="brand{% if compact_view %} compact-brand{% endif %}" href="{{ url_for('home') }}">
                 <span class="brand-badge">
                     <img class="brand-logo" src="{{ url_for('logo_asset') }}" alt="UNIALFA">
                 </span>
@@ -19,6 +20,7 @@
                 </span>
             </a>
 
+            {% if not compact_view %}
             <nav class="menu">
                 <a href="{{ url_for('home') }}">Início</a>
                 {% if session_professor %}
@@ -33,9 +35,11 @@
                 <a href="{{ url_for('nova_disciplina') }}">Nova disciplina</a>
                 <a href="{{ url_for('nova_turma') }}">Nova turma</a>
             </nav>
+            {% endif %}
         </aside>
 
-        <main class="content">
+        <main class="content{% if compact_view %} compact-content{% endif %}">
+            {% if not compact_view %}
             <header class="topbar">
                 <div>
                     <p class="eyebrow">UNIALFA</p>
@@ -48,6 +52,7 @@
                 </div>
                 {% endif %}
             </header>
+            {% endif %}
 
             {% block content %}{% endblock %}
         </main>

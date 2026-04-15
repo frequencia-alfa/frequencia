@@ -34,7 +34,7 @@ a {
 .page-shell {
     min-height: 100vh;
     display: grid;
-    grid-template-columns: 250px 1fr;
+    grid-template-columns: 300px 1fr;
 }
 
 .sidebar {
@@ -45,11 +45,12 @@ a {
 
 .brand {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 12px;
     color: #fff8f4;
     margin-bottom: 28px;
     text-decoration: none;
+    flex-wrap: nowrap;
 }
 
 .brand-badge {
@@ -78,10 +79,27 @@ a {
 .brand-text strong {
     font-size: 22px;
     line-height: 1.1;
+    white-space: nowrap;
 }
 
 .brand-text small {
     color: rgba(255, 248, 244, 0.8);
+}
+
+.compact-shell {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.compact-sidebar {
+    padding: 24px 18px 12px;
+}
+
+.compact-brand {
+    margin-bottom: 0;
+}
+
+.compact-content {
+    padding-top: 8px;
 }
 
 .menu {
@@ -378,6 +396,10 @@ code {
         align-items: flex-start;
     }
 
+    .brand-text strong {
+        white-space: normal;
+    }
+
     .content {
         padding: 18px;
     }
@@ -395,5 +417,13 @@ code {
     .presence-card {
         flex-direction: column;
         align-items: flex-start;
+    }
+
+    .compact-sidebar {
+        padding-bottom: 6px;
+    }
+
+    .compact-content {
+        padding-top: 0;
     }
 }
