@@ -36,6 +36,10 @@
                             <button type="submit" class="button-link">Encerrar</button>
                         </form>
                         {% endif %}
+                        |
+                        <form method="post" action="{{ url_for('limpar_aula_dashboard', aula_id=aula['id']) }}" class="inline-form">
+                            <button type="submit" class="button-link danger-link" onclick="return confirm('Remover apenas esta linha do dashboard?')">Limpar linha</button>
+                        </form>
                     </td>
                 </tr>
                 {% endfor %}

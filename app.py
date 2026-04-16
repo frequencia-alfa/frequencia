@@ -776,6 +776,26 @@ def limpar_dashboard():
     return redirect(url_for("dashboard"))
 
 
+@app.route("/dashboard/limpar/<aula_id>", methods=["POST"])
+def limpar_aula_dashboard(aula_id):
+    login_redirect = require_login()
+    if login_redirect:
+        return login_redirect
+
+    professor = professor_logado()
+    aula = conn.execute(
+        "SELECT id FROM aulas WHERE id = ? AND professor_id = ?",
+        (aula_id, professor["id"]),
+    ).fetchone()
+    if not aula:
+        return render_message("Dashboard", "Aula não encontrada para esse professor.")
+
+    conn.execute("DELETE FROM presenca WHERE aula_id = ?", (aula_id,))
+    conn.execute("DELETE FROM aulas WHERE id = ? AND professor_id = ?", (aula_id, professor["id"]))
+    conn.commit()
+    return redirect(url_for("dashboard"))
+
+
 @app.route("/importar/<int:alocacao_id>", methods=["GET", "POST"])
 def importar(alocacao_id):
     login_redirect = require_login()
