@@ -426,6 +426,39 @@ def first_existing_value_normalized(row, aliases):
     return ""
 
 
+def clean_student_name(value):
+    text = str(value or "").strip()
+    if not text or text.lower() == "nan":
+        return ""
+    if " - " in text:
+        text = text.split(" - ", 1)[0].strip()
+    return text
+
+
+def get_student_import_value_by_position(row, position):
+    if position >= len(row.index):
+        return ""
+    value = str(row.iloc[position]).strip()
+    if not value or value.lower() == "nan":
+        return ""
+    return value
+
+
+def extract_student_import_fields(row):
+    nome = first_existing_value_normalized(row, ["Aluno", "Nome do Aluno", "Nome"])
+    codigo = first_existing_value_normalized(
+        row,
+        ["Codigo", "CÃ³digo", "Cod.", "CÃ³d.", "Matricula", "MatrÃ­cula"],
+    )
+
+    if not nome:
+        nome = get_student_import_value_by_position(row, 0)
+    if not codigo:
+        codigo = get_student_import_value_by_position(row, 1)
+
+    return clean_student_name(nome), codigo
+
+
 def read_students_import_sheet(uploaded_file):
     uploaded_file.seek(0)
     raw_df = pd.read_excel(uploaded_file, header=None)
@@ -866,6 +899,12 @@ def importar(alocacao_id):
                 row,
                 ["Codigo", "Código", "Cod.", "Cód.", "Matricula", "Matrícula"],
             )
+
+            if not nome:
+                nome = get_student_import_value_by_position(row, 0)
+            if not codigo:
+                codigo = get_student_import_value_by_position(row, 1)
+            nome = clean_student_name(nome)
 
             if not nome or nome.lower() == "nan" or not codigo or codigo.lower() == "nan":
                 continue
