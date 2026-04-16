@@ -433,12 +433,12 @@ def read_students_import_sheet(uploaded_file):
     header_row_index = None
     for index, row in raw_df.iterrows():
         normalized_values = {normalize_column_name(value) for value in row.tolist()}
-        if "nome do aluno" in normalized_values:
+        if "aluno" in normalized_values and "codigo" in normalized_values:
             header_row_index = index
             break
 
     if header_row_index is None:
-        raise ValueError("Cabecalho com 'NOME DO ALUNO' nao encontrado.")
+        raise ValueError("Cabecalho com 'Aluno' e 'Codigo' nao encontrado.")
 
     header_values = raw_df.iloc[header_row_index].tolist()
     data_df = raw_df.iloc[header_row_index + 1 :].copy()
@@ -856,7 +856,7 @@ def importar(alocacao_id):
         for _, row in df.iterrows():
             nome = first_existing_value_normalized(
                 row,
-                ["Nome do Aluno", "Aluno", "Nome"],
+                ["Aluno", "Nome do Aluno", "Nome"],
             )
             codigo = first_existing_value_normalized(
                 row,
