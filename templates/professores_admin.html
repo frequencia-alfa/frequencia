@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+    <h2>Professores e alocações</h2>
+    <p>Esta visão mostra todos os professores cadastrados, as disciplinas e turmas vinculadas e a quantidade de alunos em cada turma.</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Professor</th>
+                <th>Perfil</th>
+                <th>Disciplina</th>
+                <th>Turma</th>
+                <th>Alunos vinculados</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if professores %}
+                {% for row in professores %}
+                <tr>
+                    <td>
+                        <strong>{{ row["nome"] }}</strong><br>
+                        <small>{{ row["email"] }}</small>
+                    </td>
+                    <td>{% if row["is_admin"] %}Administrador{% else %}Professor{% endif %}</td>
+                    <td>
+                        {% if row["alocacao_id"] %}
+                        {{ row["disciplina_codigo"] }} - {{ row["disciplina_nome"] }}
+                        {% else %}
+                        Sem alocação
+                        {% endif %}
+                    </td>
+                    <td>{{ row["turma_codigo"] or "-" }}</td>
+                    <td>{{ row["total_alunos"] if row["alocacao_id"] else 0 }}</td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="5">Nenhum professor cadastrado.</td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}
