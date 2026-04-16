@@ -430,15 +430,19 @@ def read_students_import_sheet(uploaded_file):
     uploaded_file.seek(0)
     raw_df = pd.read_excel(uploaded_file, header=None)
 
+    name_header_aliases = {"aluno", "nome do aluno", "nome"}
+    code_header_aliases = {"codigo", "cod.", "matricula", "mat."}
     header_row_index = None
     for index, row in raw_df.iterrows():
         normalized_values = {normalize_column_name(value) for value in row.tolist()}
-        if "aluno" in normalized_values and "codigo" in normalized_values:
+        has_name_header = bool(normalized_values & name_header_aliases)
+        has_code_header = bool(normalized_values & code_header_aliases)
+        if has_name_header and has_code_header:
             header_row_index = index
             break
 
     if header_row_index is None:
-        raise ValueError("Cabecalho com 'Aluno' e 'Codigo' nao encontrado.")
+        raise ValueError("Cabecalho com 'Aluno' e 'Codigo' ou 'Matricula' nao encontrado.")
 
     header_values = raw_df.iloc[header_row_index].tolist()
     data_df = raw_df.iloc[header_row_index + 1 :].copy()
