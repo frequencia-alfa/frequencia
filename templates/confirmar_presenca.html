@@ -2,18 +2,18 @@
 
 {% block content %}
 <section class="panel narrow">
-    <h2>Confirmar Presença</h2>
+    <h2>Confirmar Presenca</h2>
     <p>Turma: <strong>{{ aula["turma_codigo"] }}</strong></p>
     <p>Disciplina: <strong>{{ aula["disciplina_nome"] }}</strong></p>
-    <p>Digite seu nome ou matrícula. As sugestões aparecem automaticamente para facilitar no celular.</p>
+    <p>Digite seu nome ou matricula. As sugestoes aparecem automaticamente para facilitar no celular.</p>
 
     <form method="post" class="stack-form">
-        <label for="busca" class="field-label">Nome ou matrícula</label>
-        <input id="busca" placeholder="Comece a digitar seu nome ou matrícula" autocomplete="off" required>
+        <label for="busca" class="field-label">Nome ou matricula</label>
+        <input id="busca" placeholder="Comece a digitar seu nome ou matricula" autocomplete="off" required>
         <input id="codigo" name="codigo" type="hidden" required>
         <div id="selecionado" class="helper"></div>
         <ul id="lista" class="search-results"></ul>
-        <button type="submit">Confirmar presença</button>
+        <button type="submit">Confirmar presenca</button>
     </form>
 </section>
 
@@ -22,6 +22,8 @@ const buscaInput = document.getElementById("busca");
 const codigoInput = document.getElementById("codigo");
 const lista = document.getElementById("lista");
 const selecionado = document.getElementById("selecionado");
+const form = buscaInput.closest("form");
+let ultimoTermoBuscado = "";
 
 function limparLista() {
     lista.innerHTML = "";
@@ -36,8 +38,9 @@ function selecionarAluno(item) {
 
 async function buscarAluno() {
     const termo = buscaInput.value.trim();
-    codigoInput.value = termo;
-    selecionado.textContent = termo ? "Matrícula a enviar: " + termo : "";
+    ultimoTermoBuscado = termo;
+    codigoInput.value = "";
+    selecionado.textContent = "";
 
     if (!termo) {
         limparLista();
@@ -46,6 +49,11 @@ async function buscarAluno() {
 
     const resposta = await fetch("/buscar_aluno/{{ aula['turma_id'] }}?q=" + encodeURIComponent(termo));
     const dados = await resposta.json();
+
+    if (buscaInput.value.trim() !== ultimoTermoBuscado) {
+        return;
+    }
+
     limparLista();
 
     dados.dados.forEach((item) => {
@@ -61,5 +69,10 @@ async function buscarAluno() {
 }
 
 buscaInput.addEventListener("input", buscarAluno);
+form.addEventListener("submit", () => {
+    if (!codigoInput.value.trim()) {
+        codigoInput.value = buscaInput.value.trim();
+    }
+});
 </script>
 {% endblock %}
