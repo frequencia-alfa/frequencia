@@ -426,6 +426,26 @@ def first_existing_value_normalized(row, aliases):
     return ""
 
 
+def read_students_import_sheet(uploaded_file):
+    uploaded_file.seek(0)
+    raw_df = pd.read_excel(uploaded_file, header=None)
+
+    header_row_index = None
+    for index, row in raw_df.iterrows():
+        normalized_values = {normalize_column_name(value) for value in row.tolist()}
+        if "nome do aluno" in normalized_values:
+            header_row_index = index
+            break
+
+    if header_row_index is None:
+        raise ValueError("Cabecalho com 'NOME DO ALUNO' nao encontrado.")
+
+    header_values = raw_df.iloc[header_row_index].tolist()
+    data_df = raw_df.iloc[header_row_index + 1 :].copy()
+    data_df.columns = header_values
+    return data_df.dropna(how="all").reset_index(drop=True)
+
+
 def ensure_device_binding(dispositivo, codigo):
     existing = conn.execute(
         "SELECT codigo FROM dispositivos WHERE dispositivo = ?",
@@ -822,7 +842,9 @@ def importar(alocacao_id):
             return render_message("Importacao", "Selecione um arquivo Excel.")
 
         try:
-            df = pd.read_excel(uploaded, header=6)
+            df = read_students_import_sheet(uploaded)
+        except ValueError as exc:
+            return render_message("Importacao", str(exc))
         except Exception:
             return render_message(
                 "Importacao",
