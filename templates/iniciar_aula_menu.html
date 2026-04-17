@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+    <h2>Iniciar Aula</h2>
+    <p>Professor logado: <strong>{{ professor["nome"] }}</strong></p>
+    <p class="helper">Escolha a turma e disciplina que deseja abrir. O QR ficar&aacute; ativo por {{ expiration_minutes }} minutos.</p>
+</section>
+
+<section class="panel">
+    <table>
+        <thead>
+            <tr>
+                <th>Turma</th>
+                <th>Disciplina</th>
+                <th>Nome</th>
+                <th>Alunos importados</th>
+                <th>A&ccedil;&atilde;o</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if alocacoes_rows %}
+                {% for row in alocacoes_rows %}
+                <tr>
+                    <td>{{ row["turma_codigo"] }}</td>
+                    <td>{{ row["disciplina_codigo"] }}</td>
+                    <td>{{ row["disciplina_nome"] }}</td>
+                    <td>{{ row["total_alunos"] }}</td>
+                    <td><a class="button" href="{{ url_for('iniciar', alocacao_id=row['id']) }}">Abrir aula</a></td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="5">Nenhuma aloca&ccedil;&atilde;o cadastrada.</td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

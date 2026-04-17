@@ -1,30 +1,39 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section class="panel narrow center">
-    <h2>Aula iniciada</h2>
-    <p>Turma: <strong>{{ alocacao["turma_codigo"] }}</strong></p>
-    <p>Disciplina: <strong>{{ alocacao["disciplina_nome"] }}</strong></p>
-    <p>QR válido até <code>{{ expira_em }}</code>.</p>
-    <img src="data:image/png;base64,{{ img }}" alt="QR da aula" class="qr-image">
-    <p><a href="{{ link }}">{{ link }}</a></p>
-    <div class="actions center-actions">
-        <a class="button" href="{{ url_for('relatorio', aula_id=aula_id) }}">Acompanhar relatório</a>
-        <a class="button button-secondary" href="{{ url_for('dashboard') }}">Voltar ao dashboard</a>
-    </div>
-</section>
-
-<section class="panel narrow">
+<section class="panel attendance-live">
     <div class="presence-header">
-        <h3>Presenças confirmadas</h3>
+        <div>
+            <h2>Aula iniciada</h2>
+            <p>Turma: <strong>{{ alocacao["turma_codigo"] }}</strong></p>
+            <p>Disciplina: <strong>{{ alocacao["disciplina_nome"] }}</strong></p>
+            <p>QR v&aacute;lido at&eacute; <code>{{ expira_em }}</code>.</p>
+        </div>
         <span id="presence-count" class="helper">0 alunos</span>
     </div>
-    <div id="presence-empty" class="helper">Aguardando confirmações dos alunos...</div>
-    <div id="presence-list" class="presence-list"></div>
+
+    <div class="attendance-layout" data-density="normal">
+        <div id="presence-column-left" class="presence-column"></div>
+
+        <div class="qr-stage">
+            <img src="data:image/png;base64,{{ img }}" alt="QR da aula" class="qr-image qr-image-large">
+            <p><a href="{{ link }}">{{ link }}</a></p>
+            <div class="actions center-actions">
+                <a class="button" href="{{ url_for('relatorio', aula_id=aula_id) }}">Acompanhar relat&oacute;rio</a>
+                <a class="button button-secondary" href="{{ url_for('dashboard') }}">Voltar ao dashboard</a>
+            </div>
+        </div>
+
+        <div id="presence-column-right" class="presence-column"></div>
+    </div>
+
+    <div id="presence-empty" class="helper attendance-empty">Aguardando confirma&ccedil;&otilde;es dos alunos...</div>
 </section>
 
 <script>
-const presenceList = document.getElementById("presence-list");
+const attendanceLayout = document.querySelector(".attendance-layout");
+const presenceColumnLeft = document.getElementById("presence-column-left");
+const presenceColumnRight = document.getElementById("presence-column-right");
 const presenceEmpty = document.getElementById("presence-empty");
 const presenceCount = document.getElementById("presence-count");
 
@@ -46,19 +55,28 @@ function formatHorario(isoValue) {
     });
 }
 
-function renderPresencas(items) {
-    presenceList.innerHTML = "";
-    presenceCount.textContent = items.length + (items.length === 1 ? " aluno" : " alunos");
-    presenceEmpty.style.display = items.length ? "none" : "block";
+function renderColumn(column, items) {
+    column.innerHTML = "";
 
     items.forEach((item) => {
         const article = document.createElement("article");
-        article.className = "presence-card";
+        article.className = "presence-chip";
         article.innerHTML =
-            "<div><strong>" + item.nome + "</strong><span>Matrícula: " + item.codigo + "</span></div>" +
-            "<small>" + formatHorario(item.registrado_em) + "</small>";
-        presenceList.appendChild(article);
+            "<strong>" + item.nome + "</strong>" +
+            "<span>" + item.codigo + " - " + formatHorario(item.registrado_em) + "</span>";
+        column.appendChild(article);
     });
+}
+
+function renderPresencas(items) {
+    presenceCount.textContent = items.length + (items.length === 1 ? " aluno" : " alunos");
+    presenceEmpty.style.display = items.length ? "none" : "block";
+    attendanceLayout.dataset.density =
+        items.length > 18 ? "dense" : items.length > 10 ? "compact" : "normal";
+
+    const middle = Math.ceil(items.length / 2);
+    renderColumn(presenceColumnLeft, items.slice(0, middle));
+    renderColumn(presenceColumnRight, items.slice(middle));
 }
 
 async function carregarPresencas() {
@@ -70,7 +88,7 @@ async function carregarPresencas() {
         const dados = await resposta.json();
         renderPresencas(dados.dados || []);
     } catch (erro) {
-        console.error("Falha ao atualizar presenças", erro);
+        console.error("Falha ao atualizar presencas", erro);
     }
 }
 

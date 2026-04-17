@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     {% set compact_view = compact_layout or request.path.startswith('/aula/') %}
     {% set home_view = request.endpoint == 'home' %}
-    <title>{{ title }} | Frequência</title>
+    <title>{{ title }} | Frequ&ecirc;ncia</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body class="{% if home_view %}home-view{% endif %}">
@@ -16,28 +16,29 @@
                     <img class="brand-logo" src="{{ url_for('logo_asset') }}" alt="UNIALFA">
                 </span>
                 <span class="brand-text">
-                    <strong>Frequência</strong>
-                    <small>Controle acadêmico</small>
+                    <strong>Frequ&ecirc;ncia</strong>
+                    <small>Controle acad&ecirc;mico</small>
                 </span>
             </a>
 
             {% if not compact_view %}
             <nav class="menu">
-                <a href="{{ url_for('home') }}">Início</a>
+                <a href="{{ url_for('home') }}" class="{% if request.endpoint == 'home' %}is-active{% endif %}">In&iacute;cio</a>
                 {% if session_professor %}
-                <a href="{{ url_for('dashboard') }}">Dashboard</a>
-                <a href="{{ url_for('alocacoes') }}">Alocações</a>
-                <a href="{{ url_for('desvincular') }}">Desvincular dispositivo</a>
-                <a href="{{ url_for('nova_disciplina') }}">Nova disciplina</a>
-                <a href="{{ url_for('nova_turma') }}">Nova turma</a>
+                <a href="{{ url_for('dashboard') }}" class="{% if request.endpoint == 'dashboard' %}is-active{% endif %}">Dashboard</a>
+                <a href="{{ url_for('alocacoes') }}" class="{% if request.endpoint == 'alocacoes' %}is-active{% endif %}">Aloca&ccedil;&otilde;es</a>
+                <a href="{{ url_for('iniciar_aula_menu') }}" class="{% if request.endpoint in ['iniciar_aula_menu', 'iniciar'] %}is-active{% endif %}">Iniciar aula</a>
+                <a href="{{ url_for('desvincular') }}" class="{% if request.endpoint == 'desvincular' %}is-active{% endif %}">Desvincular dispositivo</a>
+                <a href="{{ url_for('nova_disciplina') }}" class="{% if request.endpoint == 'nova_disciplina' %}is-active{% endif %}">Nova disciplina</a>
+                <a href="{{ url_for('nova_turma') }}" class="{% if request.endpoint == 'nova_turma' %}is-active{% endif %}">Nova turma</a>
                 {% if session_is_admin %}
-                <a href="{{ url_for('novo_professor') }}">Cadastrar professor</a>
-                <a href="{{ url_for('professores_admin') }}">Visão administrativa</a>
+                <a href="{{ url_for('novo_professor') }}" class="{% if request.endpoint == 'novo_professor' %}is-active{% endif %}">Cadastrar professor</a>
+                <a href="{{ url_for('professores_admin') }}" class="{% if request.endpoint == 'professores_admin' %}is-active{% endif %}">Vis&atilde;o administrativa</a>
                 {% endif %}
                 <a href="{{ url_for('logout') }}">Sair</a>
                 {% else %}
-                <a href="{{ url_for('login') }}">Entrar</a>
-                <a href="{{ url_for('novo_professor') }}">Cadastrar professor</a>
+                <a href="{{ url_for('login') }}" class="{% if request.endpoint == 'login' %}is-active{% endif %}">Entrar</a>
+                <a href="{{ url_for('novo_professor') }}" class="{% if request.endpoint == 'novo_professor' %}is-active{% endif %}">Cadastrar professor</a>
                 {% endif %}
             </nav>
             {% endif %}

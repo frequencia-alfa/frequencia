@@ -686,6 +686,42 @@ def alocacoes():
     )
 
 
+@app.route("/iniciar_aula")
+def iniciar_aula_menu():
+    login_redirect = require_login()
+    if login_redirect:
+        return login_redirect
+
+    professor = professor_logado()
+    alocacoes_rows = conn.execute(
+        """
+        SELECT
+            a.id,
+            a.turma_id,
+            d.codigo AS disciplina_codigo,
+            d.nome AS disciplina_nome,
+            t.codigo AS turma_codigo,
+            COUNT(al.codigo) AS total_alunos
+        FROM alocacoes a
+        JOIN disciplinas d ON d.id = a.disciplina_id
+        JOIN turmas t ON t.id = a.turma_id
+        LEFT JOIN alunos al ON al.turma_id = a.turma_id
+        WHERE a.professor_id = ?
+        GROUP BY a.id, a.turma_id, d.codigo, d.nome, t.codigo
+        ORDER BY t.codigo, d.nome
+        """,
+        (professor["id"],),
+    ).fetchall()
+
+    return render_template(
+        "iniciar_aula_menu.html",
+        title="Iniciar Aula",
+        professor=professor,
+        alocacoes_rows=alocacoes_rows,
+        expiration_minutes=AULA_EXPIRATION_MINUTES,
+    )
+
+
 @app.route("/alocacoes/remover/<int:alocacao_id>", methods=["POST"])
 def remover_alocacao(alocacao_id):
     login_redirect = require_login()
