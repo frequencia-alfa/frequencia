@@ -379,7 +379,7 @@ def require_admin():
     if login_redirect:
         return login_redirect
     if not usuario_admin():
-        return render_message("Acesso negado", "Esta área é exclusiva do Administrador.")
+        return render_message("Acesso negado", "Esta \u00e1rea \u00e9 exclusiva do Administrador.")
     return None
 
 
@@ -448,7 +448,7 @@ def extract_student_import_fields(row):
     nome = first_existing_value_normalized(row, ["Aluno", "Nome do Aluno", "Nome"])
     codigo = first_existing_value_normalized(
         row,
-        ["Codigo", "CÃ³digo", "Cod.", "CÃ³d.", "Matricula", "MatrÃ­cula"],
+        ["Codigo", "C\u00f3digo", "Cod.", "C\u00f3d.", "Matricula", "Matr\u00edcula"],
     )
 
     if not nome:
@@ -519,7 +519,7 @@ def home():
 
     return render_template(
         "home.html",
-        title="Início",
+        title="In\u00edcio",
         professor=professor,
         stats=stats,
     )
@@ -545,7 +545,7 @@ def novo_professor():
             )
             conn.commit()
         except sqlite3.IntegrityError:
-            return render_message("Cadastro de Professor", "Já existe professor com esse e-mail.")
+            return render_message("Cadastro de Professor", "J\u00e1 existe professor com esse e-mail.")
         return redirect(url_for("login"))
 
     return render_template("novo_professor.html", title="Cadastrar Professor")
@@ -567,7 +567,7 @@ def login():
         if not professor or not professor["senha_hash"] or not check_password_hash(
             professor["senha_hash"], senha
         ):
-            return render_message("Login", "E-mail ou senha inválidos.")
+            return render_message("Login", "E-mail ou senha inv\u00e1lidos.")
         session["professor_id"] = professor["id"]
         return redirect("/dashboard")
 
@@ -590,7 +590,7 @@ def nova_disciplina():
         codigo = request.form["codigo"].strip().upper()
         nome = request.form["nome"].strip()
         if not codigo or not nome:
-            return render_message("Nova Disciplina", "Preencha código e nome.")
+            return render_message("Nova Disciplina", "Preencha c\u00f3digo e nome.")
         try:
             conn.execute(
                 "INSERT INTO disciplinas (codigo, nome) VALUES (?, ?)",
@@ -598,7 +598,7 @@ def nova_disciplina():
             )
             conn.commit()
         except sqlite3.IntegrityError:
-            return render_message("Nova Disciplina", "Já existe disciplina com esse código.")
+            return render_message("Nova Disciplina", "J\u00e1 existe disciplina com esse c\u00f3digo.")
         return redirect("/")
 
     return render_template("nova_disciplina.html", title="Nova Disciplina")
@@ -613,13 +613,12 @@ def nova_turma():
     if request.method == "POST":
         codigo = request.form["codigo"].strip().upper()
         if not codigo:
-            return render_message("Chamada", "Informe sua matrÃ­cula.", compact_layout=True)
-            return render_message("Nova Turma", "Informe o código da turma.")
+            return render_message("Nova Turma", "Informe o c\u00f3digo da turma.")
         try:
             conn.execute("INSERT INTO turmas (codigo) VALUES (?)", (codigo,))
             conn.commit()
         except sqlite3.IntegrityError:
-            return render_message("Nova Turma", "Já existe turma com esse código.")
+            return render_message("Nova Turma", "J\u00e1 existe turma com esse c\u00f3digo.")
         return redirect("/")
 
     return render_template("nova_turma.html", title="Nova Turma")
@@ -646,8 +645,8 @@ def alocacoes():
         ).fetchone()
         if conflito:
             return render_message(
-                "Alocações",
-                f"Esta disciplina já está vinculada a esta turma para o professor {conflito['nome']}.",
+                "Aloca\u00e7\u00f5es",
+                f"Esta disciplina j\u00e1 est\u00e1 vinculada a esta turma para o professor {conflito['nome']}.",
             )
         try:
             conn.execute(
@@ -659,7 +658,7 @@ def alocacoes():
             )
             conn.commit()
         except sqlite3.IntegrityError:
-            return render_message("Alocações", "Esse vínculo já existe para o professor.")
+            return render_message("Aloca\u00e7\u00f5es", "Esse v\u00ednculo j\u00e1 existe para o professor.")
         return redirect("/alocacoes")
 
     disciplinas = conn.execute("SELECT id, codigo, nome FROM disciplinas ORDER BY nome").fetchall()
@@ -678,7 +677,7 @@ def alocacoes():
 
     return render_template(
         "alocacoes.html",
-        title="Alocações",
+        title="Aloca\u00e7\u00f5es",
         professor=professor,
         disciplinas=disciplinas,
         turmas=turmas,
@@ -735,7 +734,7 @@ def remover_alocacao(alocacao_id):
     )
     conn.commit()
     if removed.rowcount == 0:
-        return render_message("Alocações", "Vínculo não encontrado para esse professor.")
+        return render_message("Aloca\u00e7\u00f5es", "V\u00ednculo n\u00e3o encontrado para esse professor.")
     return redirect(url_for("alocacoes"))
 
 
@@ -755,7 +754,7 @@ def limpar_alunos_alocacao(alocacao_id):
         (alocacao_id, professor["id"]),
     ).fetchone()
     if not alocacao:
-        return render_message("AlocaÃ§Ãµes", "AlocaÃ§Ã£o nÃ£o encontrada para esse professor.")
+        return render_message("Aloca\u00e7\u00f5es", "Aloca\u00e7\u00e3o n\u00e3o encontrada para esse professor.")
 
     codigos = [
         row["codigo"]
@@ -841,7 +840,7 @@ def professores_admin():
 
     return render_template(
         "professores_admin.html",
-        title="Visão Administrativa",
+        title="Vis\u00e3o Administrativa",
         professores=professores,
     )
 
@@ -881,7 +880,7 @@ def limpar_aula_dashboard(aula_id):
         (aula_id, professor["id"]),
     ).fetchone()
     if not aula:
-        return render_message("Dashboard", "Aula não encontrada para esse professor.")
+        return render_message("Dashboard", "Aula n\u00e3o encontrada para esse professor.")
 
     conn.execute("DELETE FROM presenca WHERE aula_id = ?", (aula_id,))
     conn.execute("DELETE FROM aulas WHERE id = ? AND professor_id = ?", (aula_id, professor["id"]))
@@ -921,7 +920,7 @@ def importar(alocacao_id):
         except Exception:
             return render_message(
                 "Importacao",
-                "Não foi possível ler a planilha. Verifique se o arquivo segue o modelo esperado.",
+                "N\u00e3o foi poss\u00edvel ler a planilha. Verifique se o arquivo segue o modelo esperado.",
             )
 
         inserted = 0
@@ -933,7 +932,7 @@ def importar(alocacao_id):
             )
             codigo = first_existing_value_normalized(
                 row,
-                ["Codigo", "Código", "Cod.", "Cód.", "Matricula", "Matrícula"],
+                ["Codigo", "C\u00f3digo", "Cod.", "C\u00f3d.", "Matricula", "Matr\u00edcula"],
             )
 
             if not nome:
@@ -999,7 +998,7 @@ def iniciar(alocacao_id):
     if alunos_total == 0:
         return render_message(
             "Iniciar Aula",
-            "Essa turma ainda não possui alunos importados. Importe a lista antes de abrir a chamada.",
+            "Essa turma ainda n\u00e3o possui alunos importados. Importe a lista antes de abrir a chamada.",
         )
 
     if request.method == "POST":
@@ -1126,17 +1125,17 @@ def aula(aula_id):
     if not aula_ativa(aula_row):
         return render_message(
             "Chamada encerrada",
-            "O QR desta aula expirou ou jÃ¡ foi encerrado.",
+            "O QR desta aula expirou ou j\u00e1 foi encerrado.",
             compact_layout=True,
         )
-        return render_message("Chamada encerrada", "O QR desta aula expirou ou já foi encerrado.")
+        return render_message("Chamada encerrada", "O QR desta aula expirou ou j\u00e1 foi encerrado.")
 
     dispositivo = request.cookies.get("device") or str(uuid.uuid4())
 
     if request.method == "POST":
         codigo = request.form["codigo"].strip()
         if not codigo:
-            return render_message("Chamada", "Informe sua matrícula.")
+            return render_message("Chamada", "Informe sua matr\u00edcula.")
 
         aluno = conn.execute(
             "SELECT codigo, nome FROM alunos WHERE codigo = ? AND turma_id = ?",
@@ -1154,12 +1153,12 @@ def aula(aula_id):
         if vinculo_dispositivo and vinculo_dispositivo["codigo"] != codigo:
             return render_message(
                 "Chamada",
-                "Este dispositivo jÃ¡ estÃ¡ vinculado a outra matrÃ­cula. Solicite desvinculaÃ§Ã£o ao professor.",
+                "Este dispositivo j\u00e1 est\u00e1 vinculado a outra matr\u00edcula. Solicite desvincula\u00e7\u00e3o ao professor.",
                 compact_layout=True,
             )
             return render_message(
                 "Chamada",
-                "Este dispositivo já está vinculado a outra matrícula. Solicite desvinculação ao professor.",
+                "Este dispositivo j\u00e1 est\u00e1 vinculado a outra matr\u00edcula. Solicite desvincula\u00e7\u00e3o ao professor.",
             )
 
         presenca_existente = conn.execute(
@@ -1178,15 +1177,15 @@ def aula(aula_id):
 
         resp = make_response(
             render_message(
-                "Presença confirmada",
-                f"Presença registrada para {aluno['nome']}.",
+                "Presen\u00e7a confirmada",
+                f"Presen\u00e7a registrada para {aluno['nome']}.",
             )
         )
         resp.set_cookie("codigo", codigo, max_age=60 * 60 * 24 * 180, httponly=True, samesite="Lax")
         resp.set_cookie("device", dispositivo, max_age=60 * 60 * 24 * 180, httponly=True, samesite="Lax")
         return resp
 
-    return render_template("confirmar_presenca.html", title="Confirmar Presença", aula=aula_row)
+    return render_template("confirmar_presenca.html", title="Confirmar Presen\u00e7a", aula=aula_row)
 
 
 @app.route("/buscar_aluno/<int:turma_id>")
@@ -1233,7 +1232,7 @@ def desvincular_legacy_old():
         codigo = request.form["codigo"].strip()
         conn.execute("DELETE FROM dispositivos WHERE codigo = ?", (codigo,))
         conn.commit()
-        return render_message("Desvinculação", "Dispositivo removido para a matrícula informada.")
+        return render_message("Desvincula\u00e7\u00e3o", "Dispositivo removido para a matr\u00edcula informada.")
 
     return render_template("desvincular.html", title="Desvincular Dispositivo")
 
@@ -1250,7 +1249,7 @@ def desvincular():
         codigo = request.form["codigo"].strip()
         conn.execute("DELETE FROM dispositivos WHERE codigo = ?", (codigo,))
         conn.commit()
-        return render_message("DesvinculaÃ§Ã£o", "Dispositivo removido para a matrÃ­cula informada.")
+        return render_message("Desvincula\u00e7\u00e3o", "Dispositivo removido para a matr\u00edcula informada.")
 
     vinculados = conn.execute(
         """
@@ -1294,7 +1293,7 @@ def relatorio(aula_id):
         (aula_id, professor["id"]),
     ).fetchone()
     if not aula_row:
-        return render_message("Relatório", "Aula não encontrada para esse professor.")
+        return render_message("Relat\u00f3rio", "Aula n\u00e3o encontrada para esse professor.")
 
     presentes = conn.execute(
         """
@@ -1323,7 +1322,7 @@ def relatorio(aula_id):
     resumo = {"total": total, "presentes": qtd, "faltantes": faltas, "perc": perc}
     return render_template(
         "relatorio.html",
-        title="Relatório",
+        title="Relat\u00f3rio",
         aula=aula_row,
         presentes=presentes,
         resumo=resumo,
