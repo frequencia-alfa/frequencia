@@ -24,6 +24,8 @@ const lista = document.getElementById("lista");
 const selecionado = document.getElementById("selecionado");
 const form = buscaInput.closest("form");
 let ultimoTermoBuscado = "";
+let buscaTimer = null;
+let buscaController = null;
 
 function limparLista() {
     lista.innerHTML = "";
@@ -43,12 +45,41 @@ async function buscarAluno() {
     selecionado.textContent = "";
 
     if (!termo) {
+        if (buscaController) {
+            buscaController.abort();
+            buscaController = null;
+        }
         limparLista();
         return;
     }
 
-    const resposta = await fetch("/buscar_aluno/{{ aula['turma_id'] }}?q=" + encodeURIComponent(termo));
-    const dados = await resposta.json();
+    if (!/^\d+$/.test(termo) && termo.length < 2) {
+        if (buscaController) {
+            buscaController.abort();
+            buscaController = null;
+        }
+        limparLista();
+        return;
+    }
+
+    if (buscaController) {
+        buscaController.abort();
+    }
+    buscaController = new AbortController();
+
+    let dados;
+    try {
+        const resposta = await fetch("/buscar_aluno/{{ aula['turma_id'] }}?q=" + encodeURIComponent(termo), {
+            signal: buscaController.signal,
+            cache: "no-store",
+        });
+        dados = await resposta.json();
+    } catch (erro) {
+        if (erro.name !== "AbortError") {
+            console.error("Falha na busca de alunos", erro);
+        }
+        return;
+    }
 
     if (buscaInput.value.trim() !== ultimoTermoBuscado) {
         return;
@@ -68,7 +99,10 @@ async function buscarAluno() {
     });
 }
 
-buscaInput.addEventListener("input", buscarAluno);
+buscaInput.addEventListener("input", () => {
+    clearTimeout(buscaTimer);
+    buscaTimer = setTimeout(buscarAluno, 250);
+});
 form.addEventListener("submit", () => {
     if (!codigoInput.value.trim()) {
         codigoInput.value = buscaInput.value.trim();

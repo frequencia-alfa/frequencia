@@ -1191,7 +1191,11 @@ def aula(aula_id):
 @app.route("/buscar_aluno/<int:turma_id>")
 def buscar_aluno(turma_id):
     termo = request.args.get("q", "").strip()
-    if len(termo) < 1:
+    if not termo:
+        return jsonify({"dados": []})
+
+    busca_por_codigo = termo.isdigit()
+    if not busca_por_codigo and len(termo) < 2:
         return jsonify({"dados": []})
 
     dados = conn.execute(
@@ -1212,7 +1216,7 @@ def buscar_aluno(turma_id):
         (
             turma_id,
             f"%{termo}%",
-            f"%{termo}%",
+            f"{termo}%" if busca_por_codigo else f"%{termo}%",
             f"{termo}%",
             f"{termo}%",
         ),
