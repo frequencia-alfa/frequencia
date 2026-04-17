@@ -3,9 +3,50 @@
 {% block content %}
 <section class="panel narrow">
     <h2>Desvincular Dispositivo</h2>
+    <p class="helper">Informe uma matr&iacute;cula manualmente ou escolha um aluno j&aacute; vinculado na lista abaixo.</p>
     <form method="post" class="stack-form">
-        <input name="codigo" placeholder="Matrícula do aluno" required>
+        <input name="codigo" placeholder="Matr&iacute;cula do aluno" required>
         <button type="submit">Desvincular</button>
     </form>
+</section>
+
+<section class="panel">
+    <div class="presence-header">
+        <h3>Alunos com dispositivo vinculado</h3>
+        <span class="helper">{{ vinculados|length }} registro{% if vinculados|length != 1 %}s{% endif %}</span>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>Aluno</th>
+                <th>Matr&iacute;cula</th>
+                <th>Turma</th>
+                <th>Dispositivo</th>
+                <th>A&ccedil;&atilde;o</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if vinculados %}
+                {% for aluno in vinculados %}
+                <tr>
+                    <td>{{ aluno["nome"] }}</td>
+                    <td>{{ aluno["codigo"] }}</td>
+                    <td>{{ aluno["turma_codigo"] }}</td>
+                    <td><code>{{ aluno["dispositivo"][:18] }}{% if aluno["dispositivo"]|length > 18 %}...{% endif %}</code></td>
+                    <td>
+                        <form method="post" class="inline-form">
+                            <input type="hidden" name="codigo" value="{{ aluno['codigo'] }}">
+                            <button type="submit" class="button-link danger-link">Desvincular</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="5">Nenhum aluno com dispositivo vinculado para este professor.</td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
 </section>
 {% endblock %}

@@ -1223,8 +1223,8 @@ def buscar_aluno(turma_id):
     )
 
 
-@app.route("/desvincular", methods=["GET", "POST"])
-def desvincular():
+@app.route("/desvincular_legacy_old", methods=["GET", "POST"])
+def desvincular_legacy_old():
     login_redirect = require_login()
     if login_redirect:
         return login_redirect
@@ -1236,6 +1236,44 @@ def desvincular():
         return render_message("Desvinculação", "Dispositivo removido para a matrícula informada.")
 
     return render_template("desvincular.html", title="Desvincular Dispositivo")
+
+
+@app.route("/desvincular", methods=["GET", "POST"])
+def desvincular():
+    login_redirect = require_login()
+    if login_redirect:
+        return login_redirect
+
+    professor = professor_logado()
+
+    if request.method == "POST":
+        codigo = request.form["codigo"].strip()
+        conn.execute("DELETE FROM dispositivos WHERE codigo = ?", (codigo,))
+        conn.commit()
+        return render_message("DesvinculaÃ§Ã£o", "Dispositivo removido para a matrÃ­cula informada.")
+
+    vinculados = conn.execute(
+        """
+        SELECT DISTINCT
+            al.nome,
+            al.codigo,
+            t.codigo AS turma_codigo,
+            d.dispositivo
+        FROM dispositivos d
+        JOIN alunos al ON al.codigo = d.codigo
+        JOIN alocacoes a ON a.turma_id = al.turma_id
+        JOIN turmas t ON t.id = al.turma_id
+        WHERE a.professor_id = ?
+        ORDER BY al.nome, al.codigo
+        """,
+        (professor["id"],),
+    ).fetchall()
+
+    return render_template(
+        "desvincular.html",
+        title="Desvincular Dispositivo",
+        vinculados=vinculados,
+    )
 
 
 @app.route("/relatorio/<aula_id>")
