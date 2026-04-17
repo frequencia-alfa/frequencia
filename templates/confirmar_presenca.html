@@ -5,7 +5,7 @@
     <h2>Confirmar Presenca</h2>
     <p>Turma: <strong>{{ aula["turma_codigo"] }}</strong></p>
     <p>Disciplina: <strong>{{ aula["disciplina_nome"] }}</strong></p>
-    <p>Digite seu nome ou matricula. As sugestoes aparecem automaticamente para facilitar no celular.</p>
+    <p>Digite pelo menos 2 letras do nome ou os numeros da matricula. O sistema vai filtrando e mostrando nome completo com a matricula.</p>
 
     <form method="post" class="stack-form">
         <label for="busca" class="field-label">Nome ou matricula</label>
@@ -101,7 +101,7 @@ async function buscarAluno() {
 
 buscaInput.addEventListener("input", () => {
     clearTimeout(buscaTimer);
-    buscaTimer = setTimeout(buscarAluno, 250);
+    buscaTimer = setTimeout(buscarAluno, 180);
 });
 form.addEventListener("submit", () => {
     if (!codigoInput.value.trim()) {

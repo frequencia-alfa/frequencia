@@ -498,6 +498,18 @@ def ensure_device_binding(dispositivo, codigo):
     return None
 
 
+def aluno_vinculado_no_dispositivo(dispositivo, turma_id):
+    return conn.execute(
+        """
+        SELECT al.codigo, al.nome
+        FROM dispositivos d
+        JOIN alunos al ON al.codigo = d.codigo
+        WHERE d.dispositivo = ? AND al.turma_id = ?
+        """,
+        (dispositivo, turma_id),
+    ).fetchone()
+
+
 @app.context_processor
 def inject_professor():
     professor = professor_logado()
@@ -1132,6 +1144,33 @@ def aula(aula_id):
 
     dispositivo = request.cookies.get("device") or str(uuid.uuid4())
 
+    if request.method == "GET":
+        aluno_vinculado = aluno_vinculado_no_dispositivo(dispositivo, aula_row["turma_id"])
+        if aluno_vinculado:
+            presenca_existente = conn.execute(
+                "SELECT 1 FROM presenca WHERE codigo = ? AND aula_id = ?",
+                (aluno_vinculado["codigo"], aula_id),
+            ).fetchone()
+            if not presenca_existente:
+                conn.execute(
+                    """
+                    INSERT INTO presenca (codigo, aula_id, dispositivo, registrado_em)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (aluno_vinculado["codigo"], aula_id, dispositivo, datetime.utcnow().isoformat()),
+                )
+                conn.commit()
+
+            resp = make_response(
+                render_message(
+                    "Presen\u00e7a confirmada",
+                    f"Bem-vindo novamente, {aluno_vinculado['nome']}. Presen\u00e7a confirmada automaticamente.",
+                )
+            )
+            resp.set_cookie("codigo", aluno_vinculado["codigo"], max_age=60 * 60 * 24 * 180, httponly=True, samesite="Lax")
+            resp.set_cookie("device", dispositivo, max_age=60 * 60 * 24 * 180, httponly=True, samesite="Lax")
+            return resp
+
     if request.method == "POST":
         codigo = request.form["codigo"].strip()
         if not codigo:
@@ -1194,8 +1233,9 @@ def buscar_aluno(turma_id):
     if not termo:
         return jsonify({"dados": []})
 
+    termo_normalizado = termo.lower()
     busca_por_codigo = termo.isdigit()
-    if not busca_por_codigo and len(termo) < 2:
+    if len(termo_normalizado) < 2 and not busca_por_codigo:
         return jsonify({"dados": []})
 
     dados = conn.execute(
@@ -1203,11 +1243,11 @@ def buscar_aluno(turma_id):
         SELECT codigo, nome
         FROM alunos
         WHERE turma_id = ?
-          AND (nome LIKE ? OR codigo LIKE ?)
+          AND (LOWER(nome) LIKE ? OR codigo LIKE ?)
         ORDER BY
             CASE
                 WHEN codigo LIKE ? THEN 0
-                WHEN nome LIKE ? THEN 1
+                WHEN LOWER(nome) LIKE ? THEN 1
                 ELSE 2
             END,
             nome
@@ -1215,10 +1255,10 @@ def buscar_aluno(turma_id):
         """,
         (
             turma_id,
-            f"%{termo}%",
-            f"{termo}%" if busca_por_codigo else f"%{termo}%",
+            f"%{termo_normalizado}%",
+            f"{termo}%" if busca_por_codigo else f"%{termo_normalizado}%",
             f"{termo}%",
-            f"{termo}%",
+            f"{termo_normalizado}%",
         ),
     ).fetchall()
     return jsonify(
