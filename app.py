@@ -398,6 +398,66 @@ def format_display_date(date_value):
         return str(date_value)
 
 
+def build_qr_payload(aula_id):
+    link = request.host_url.rstrip("/") + "/aula/" + aula_id
+    qr = qrcode.make(link)
+    buf = BytesIO()
+    qr.save(buf)
+    return {
+        "link": link,
+        "img": base64.b64encode(buf.getvalue()).decode(),
+    }
+
+
+def get_professor_active_aula(professor_id):
+    aulas = conn.execute(
+        """
+        SELECT
+            au.id,
+            au.turma_id,
+            au.disciplina_id,
+            au.professor_id,
+            au.expira_em,
+            au.criada_em,
+            au.status,
+            a.id AS alocacao_id,
+            t.codigo AS turma_codigo,
+            d.codigo AS disciplina_codigo,
+            d.nome AS disciplina_nome
+        FROM aulas au
+        JOIN turmas t ON t.id = au.turma_id
+        JOIN disciplinas d ON d.id = au.disciplina_id
+        LEFT JOIN alocacoes a
+            ON a.professor_id = au.professor_id
+           AND a.turma_id = au.turma_id
+           AND a.disciplina_id = au.disciplina_id
+        WHERE au.professor_id = ? AND au.status = 'aberta'
+        ORDER BY au.criada_em DESC
+        """,
+        (professor_id,),
+    ).fetchall()
+
+    for aula in aulas:
+        if aula_ativa(aula):
+            return aula
+    return None
+
+
+def build_active_aula_view(aula_row):
+    qr_payload = build_qr_payload(aula_row["id"])
+    return {
+        "id": aula_row["id"],
+        "alocacao_id": aula_row["alocacao_id"],
+        "turma_codigo": aula_row["turma_codigo"],
+        "disciplina_codigo": aula_row["disciplina_codigo"],
+        "disciplina_nome": aula_row["disciplina_nome"],
+        "expira_em_iso": aula_row["expira_em"],
+        "expira_em": datetime.fromisoformat(aula_row["expira_em"]).strftime("%d/%m/%Y %H:%M UTC"),
+        "link": qr_payload["link"],
+        "img": qr_payload["img"],
+    }
+
+
 def first_existing_value(row, column_names):
     for column_name in column_names:
         if column_name in row and str(row.get(column_name, "")).strip():
@@ -724,11 +784,15 @@ def iniciar_aula_menu():
         (professor["id"],),
     ).fetchall()
 
+    active_aula_row = get_professor_active_aula(professor["id"])
+    active_aula = build_active_aula_view(active_aula_row) if active_aula_row else None
+
     return render_template(
         "iniciar_aula_menu.html",
         title="Iniciar Aula",
         professor=professor,
         alocacoes_rows=alocacoes_rows,
+        active_aula=active_aula,
         expiration_minutes=AULA_EXPIRATION_MINUTES,
     )
 
@@ -1003,6 +1067,10 @@ def iniciar(alocacao_id):
     if not alocacao:
         return render_message("Iniciar Aula", "Alocacao nao encontrada para esse professor.")
 
+    active_aula_row = get_professor_active_aula(professor["id"])
+    if active_aula_row:
+        return redirect(url_for("iniciar_aula_menu"))
+
     alunos_total = conn.scalar(
         "SELECT COUNT(*) FROM alunos WHERE turma_id = ?",
         (alocacao["turma_id"],),
@@ -1033,22 +1101,7 @@ def iniciar(alocacao_id):
                 ),
         )
         conn.commit()
-
-        link = request.host_url.rstrip("/") + "/aula/" + aula_id
-        qr = qrcode.make(link)
-        buf = BytesIO()
-        qr.save(buf)
-        img = base64.b64encode(buf.getvalue()).decode()
-
-        return render_template(
-            "aula_iniciada.html",
-            title="Aula iniciada",
-            alocacao=alocacao,
-            expira_em=expira_em.strftime("%d/%m/%Y %H:%M UTC"),
-            img=img,
-            link=link,
-            aula_id=aula_id,
-        )
+        return redirect(url_for("iniciar_aula_menu"))
 
     return render_template(
         "iniciar.html",
@@ -1077,6 +1130,9 @@ def encerrar_aula(aula_id):
     conn.commit()
     if updated.rowcount == 0:
         return render_message("Encerrar Aula", "Aula nao encontrada para esse professor.")
+    destino = request.form.get("next")
+    if destino == "iniciar_aula_menu":
+        return redirect(url_for("iniciar_aula_menu"))
     return redirect(url_for("dashboard"))
 
 

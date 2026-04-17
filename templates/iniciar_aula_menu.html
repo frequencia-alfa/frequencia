@@ -4,8 +4,45 @@
 <section class="panel">
     <h2>Iniciar Aula</h2>
     <p>Professor logado: <strong>{{ professor["nome"] }}</strong></p>
-    <p class="helper">Escolha a turma e disciplina que deseja abrir. O QR ficar&aacute; ativo por {{ expiration_minutes }} minutos.</p>
+    <p class="helper">Escolha a turma e disciplina que deseja abrir. O QR ficar&aacute; ativo por {{ expiration_minutes }} minutos e continuar&aacute; vis&iacute;vel nesta aba at&eacute; o encerramento manual ou o fim do tempo.</p>
 </section>
+
+{% if active_aula %}
+<section class="panel attendance-live" id="aula-ativa">
+    <div class="presence-header">
+        <div>
+            <h2>Aula em andamento</h2>
+            <p>Turma: <strong>{{ active_aula["turma_codigo"] }}</strong></p>
+            <p>Disciplina: <strong>{{ active_aula["disciplina_nome"] }}</strong></p>
+            <p>QR v&aacute;lido at&eacute; <code>{{ active_aula["expira_em"] }}</code>.</p>
+        </div>
+        <div class="active-aula-actions">
+            <span class="status-pill">QR ativo</span>
+            <span id="presence-count" class="helper">0 alunos</span>
+        </div>
+    </div>
+
+    <div class="attendance-layout" data-density="normal">
+        <div id="presence-column-left" class="presence-column"></div>
+
+        <div class="qr-stage">
+            <img src="data:image/png;base64,{{ active_aula['img'] }}" alt="QR da aula" class="qr-image qr-image-large">
+            <p><a href="{{ active_aula['link'] }}">{{ active_aula["link"] }}</a></p>
+            <div class="actions center-actions">
+                <a class="button" href="{{ url_for('relatorio', aula_id=active_aula['id']) }}">Acompanhar relat&oacute;rio</a>
+                <form method="post" action="{{ url_for('encerrar_aula', aula_id=active_aula['id']) }}" class="inline-form">
+                    <input type="hidden" name="next" value="iniciar_aula_menu">
+                    <button type="submit" class="button button-secondary">Encerrar aula</button>
+                </form>
+            </div>
+        </div>
+
+        <div id="presence-column-right" class="presence-column"></div>
+    </div>
+
+    <div id="presence-empty" class="helper attendance-empty">Aguardando confirma&ccedil;&otilde;es dos alunos...</div>
+</section>
+{% endif %}
 
 <section class="panel">
     <table>
@@ -26,7 +63,15 @@
                     <td>{{ row["disciplina_codigo"] }}</td>
                     <td>{{ row["disciplina_nome"] }}</td>
                     <td>{{ row["total_alunos"] }}</td>
-                    <td><a class="button" href="{{ url_for('iniciar', alocacao_id=row['id']) }}">Abrir aula</a></td>
+                    <td>
+                        {% if active_aula and row["id"] == active_aula["alocacao_id"] %}
+                        <a class="button button-secondary" href="#aula-ativa">Ver QR ativo</a>
+                        {% elif active_aula %}
+                        <span class="muted-action">Encerrar a aula atual para abrir outra</span>
+                        {% else %}
+                        <a class="button" href="{{ url_for('iniciar', alocacao_id=row['id']) }}">Abrir aula</a>
+                        {% endif %}
+                    </td>
                 </tr>
                 {% endfor %}
             {% else %}
@@ -37,4 +82,82 @@
         </tbody>
     </table>
 </section>
+
+{% if active_aula %}
+<script>
+const attendanceLayout = document.querySelector(".attendance-layout");
+const presenceColumnLeft = document.getElementById("presence-column-left");
+const presenceColumnRight = document.getElementById("presence-column-right");
+const presenceEmpty = document.getElementById("presence-empty");
+const presenceCount = document.getElementById("presence-count");
+const expiracaoAula = new Date("{{ active_aula['expira_em_iso'] }}");
+
+function formatHorario(isoValue) {
+    if (!isoValue) {
+        return "";
+    }
+
+    const data = new Date(isoValue);
+    if (Number.isNaN(data.getTime())) {
+        return isoValue;
+    }
+
+    return data.toLocaleTimeString("pt-BR", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        timeZone: "UTC",
+    });
+}
+
+function renderColumn(column, items) {
+    column.innerHTML = "";
+
+    items.forEach((item) => {
+        const article = document.createElement("article");
+        article.className = "presence-chip";
+        article.innerHTML =
+            "<strong>" + item.nome + "</strong>" +
+            "<span>" + item.codigo + " - " + formatHorario(item.registrado_em) + "</span>";
+        column.appendChild(article);
+    });
+}
+
+function renderPresencas(items) {
+    presenceCount.textContent = items.length + (items.length === 1 ? " aluno" : " alunos");
+    presenceEmpty.style.display = items.length ? "none" : "block";
+    attendanceLayout.dataset.density =
+        items.length > 18 ? "dense" : items.length > 10 ? "compact" : "normal";
+
+    const middle = Math.ceil(items.length / 2);
+    renderColumn(presenceColumnLeft, items.slice(0, middle));
+    renderColumn(presenceColumnRight, items.slice(middle));
+}
+
+async function carregarPresencas() {
+    try {
+        const resposta = await fetch("/presencas/{{ active_aula['id'] }}", { cache: "no-store" });
+        if (!resposta.ok) {
+            return;
+        }
+        const dados = await resposta.json();
+        renderPresencas(dados.dados || []);
+    } catch (erro) {
+        console.error("Falha ao atualizar presencas", erro);
+    }
+}
+
+carregarPresencas();
+setInterval(carregarPresencas, 3000);
+
+if (!Number.isNaN(expiracaoAula.getTime())) {
+    const tempoRestante = expiracaoAula.getTime() - Date.now();
+    if (tempoRestante <= 0) {
+        window.location.reload();
+    } else {
+        setTimeout(() => window.location.reload(), tempoRestante + 500);
+    }
+}
+</script>
+{% endif %}
 {% endblock %}

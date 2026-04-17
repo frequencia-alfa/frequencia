@@ -189,6 +189,11 @@ a {
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
 }
 
+.muted-action {
+    color: var(--muted);
+    font-size: 14px;
+}
+
 .content {
     padding: 30px;
 }
@@ -414,6 +419,24 @@ td {
     margin-inline: auto;
 }
 
+.active-aula-actions {
+    display: grid;
+    justify-items: end;
+    gap: 8px;
+}
+
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: rgba(232, 66, 29, 0.12);
+    color: var(--brand-dark);
+    font-size: 13px;
+    font-weight: 700;
+}
+
 .presence-header {
     display: flex;
     justify-content: space-between;
@@ -544,6 +567,10 @@ code {
     .presence-header {
         flex-direction: column;
         align-items: flex-start;
+    }
+
+    .active-aula-actions {
+        justify-items: start;
     }
 
     .attendance-layout {
