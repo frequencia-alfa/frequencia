@@ -494,6 +494,43 @@ td {
     color: var(--muted);
 }
 
+.student-frequency {
+    margin-inline: auto;
+}
+
+.student-summary {
+    display: grid;
+    gap: 4px;
+    padding: 16px 18px;
+    margin-top: 18px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: var(--panel-soft);
+}
+
+.student-summary span {
+    color: var(--muted);
+}
+
+.student-frequency-list {
+    display: grid;
+    gap: 12px;
+    margin-top: 18px;
+}
+
+.student-frequency-card {
+    display: grid;
+    gap: 6px;
+    padding: 16px 18px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: #fffdfb;
+}
+
+.student-frequency-card span {
+    color: var(--muted);
+}
+
 .presence-chip span {
     font-size: 13px;
 }

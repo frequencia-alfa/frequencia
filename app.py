@@ -582,6 +582,63 @@ def aluno_vinculado_no_dispositivo(dispositivo, turma_id):
     ).fetchone()
 
 
+def consulta_frequencia_disponivel(dispositivo):
+    if not dispositivo:
+        return False
+    return bool(
+        conn.execute(
+            """
+            SELECT 1
+            FROM dispositivos d
+            JOIN presenca p
+              ON p.codigo = d.codigo
+             AND p.dispositivo = d.dispositivo
+            WHERE d.dispositivo = ?
+            LIMIT 1
+            """,
+            (dispositivo,),
+        ).fetchone()
+    )
+
+
+def carregar_frequencias_dispositivo(dispositivo):
+    if not dispositivo:
+        return []
+    return conn.execute(
+        """
+        SELECT
+            al.nome AS aluno_nome,
+            al.codigo AS aluno_codigo,
+            t.codigo AS turma_codigo,
+            d.nome AS disciplina_nome,
+            au.data,
+            p.registrado_em
+        FROM dispositivos dv
+        JOIN presenca p
+          ON p.codigo = dv.codigo
+         AND p.dispositivo = dv.dispositivo
+        JOIN aulas au ON au.id = p.aula_id
+        JOIN turmas t ON t.id = au.turma_id
+        JOIN disciplinas d ON d.id = au.disciplina_id
+        JOIN alunos al
+          ON al.codigo = p.codigo
+         AND al.turma_id = au.turma_id
+        WHERE dv.dispositivo = ?
+        ORDER BY p.registrado_em DESC
+        """,
+        (dispositivo,),
+    ).fetchall()
+
+
+def redirecionar_aluno_para_consulta():
+    if professor_logado():
+        return None
+    dispositivo = request.cookies.get("device")
+    if consulta_frequencia_disponivel(dispositivo):
+        return redirect(url_for("minha_frequencia"))
+    return None
+
+
 @app.context_processor
 def inject_professor():
     professor = professor_logado()
@@ -593,6 +650,10 @@ def inject_professor():
 
 @app.route("/")
 def home():
+    student_redirect = redirecionar_aluno_para_consulta()
+    if student_redirect:
+        return student_redirect
+
     professor = professor_logado()
     stats = {
         "professores": conn.scalar("SELECT COUNT(*) FROM professores"),
@@ -616,6 +677,10 @@ def logo_asset():
 
 @app.route("/novo_professor", methods=["GET", "POST"])
 def novo_professor():
+    student_redirect = redirecionar_aluno_para_consulta()
+    if student_redirect:
+        return student_redirect
+
     if request.method == "POST":
         nome = request.form["nome"].strip()
         email = request.form["email"].strip().lower()
@@ -637,6 +702,10 @@ def novo_professor():
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    student_redirect = redirecionar_aluno_para_consulta()
+    if student_redirect:
+        return student_redirect
+
     if request.method == "POST":
         identificador = request.form["email"].strip().lower()
         senha = request.form["senha"]
@@ -656,6 +725,31 @@ def login():
         return redirect("/dashboard")
 
     return render_template("login.html", title="Login")
+
+
+@app.route("/minha_frequencia")
+def minha_frequencia():
+    dispositivo = request.cookies.get("device")
+    frequencias = carregar_frequencias_dispositivo(dispositivo)
+    if not frequencias:
+        return render_template(
+            "message.html",
+            title="Minha Frequencia",
+            message="A consulta da frequencia fica disponivel neste aparelho depois que a presenca for autenticada pelo QR code.",
+            compact_layout=True,
+            student_layout=True,
+        )
+
+    aluno = frequencias[0]
+    return render_template(
+        "minha_frequencia.html",
+        title="Minha Frequencia",
+        compact_layout=True,
+        student_layout=True,
+        aluno_nome=aluno["aluno_nome"],
+        aluno_codigo=aluno["aluno_codigo"],
+        frequencias=frequencias,
+    )
 
 
 @app.route("/logout")
@@ -1203,14 +1297,21 @@ def aula(aula_id):
     ).fetchone()
 
     if not aula_row:
-        return render_message("Chamada", "Aula nao encontrada.", compact_layout=True)
-    if not aula_ativa(aula_row):
-        return render_message(
-            "Chamada encerrada",
-            "O QR desta aula expirou ou j\u00e1 foi encerrado.",
+        return render_template(
+            "message.html",
+            title="Chamada",
+            message="Aula nao encontrada.",
             compact_layout=True,
+            student_layout=True,
         )
-        return render_message("Chamada encerrada", "O QR desta aula expirou ou j\u00e1 foi encerrado.")
+    if not aula_ativa(aula_row):
+        return render_template(
+            "message.html",
+            title="Chamada encerrada",
+            message="O QR desta aula expirou ou j\u00e1 foi encerrado.",
+            compact_layout=True,
+            student_layout=True,
+        )
 
     dispositivo = request.cookies.get("device") or str(uuid.uuid4())
 
@@ -1232,9 +1333,13 @@ def aula(aula_id):
                 conn.commit()
 
             resp = make_response(
-                render_message(
-                    "Presen\u00e7a confirmada",
-                    f"Bem-vindo novamente, {aluno_vinculado['nome']}. Presen\u00e7a confirmada automaticamente.",
+                render_template(
+                    "message.html",
+                    title="Presen\u00e7a confirmada",
+                    message=f"Bem-vindo novamente, {aluno_vinculado['nome']}. Presen\u00e7a confirmada automaticamente.",
+                    extra=f'<div class="actions"><a class="button" href="{url_for("minha_frequencia")}">Consultar minha frequ&ecirc;ncia</a></div>',
+                    compact_layout=True,
+                    student_layout=True,
                 )
             )
             resp.set_cookie("codigo", aluno_vinculado["codigo"], max_age=60 * 60 * 24 * 180, httponly=True, samesite="Lax")
@@ -1244,30 +1349,35 @@ def aula(aula_id):
     if request.method == "POST":
         codigo = request.form["codigo"].strip()
         if not codigo:
-            return render_message("Chamada", "Informe sua matr\u00edcula.")
+            return render_template(
+                "message.html",
+                title="Chamada",
+                message="Informe sua matr\u00edcula.",
+                compact_layout=True,
+                student_layout=True,
+            )
 
         aluno = conn.execute(
             "SELECT codigo, nome FROM alunos WHERE codigo = ? AND turma_id = ?",
             (codigo, aula_row["turma_id"]),
         ).fetchone()
         if not aluno:
-            return render_message(
-                "Chamada",
-                "Matricula nao encontrada para esta turma.",
+            return render_template(
+                "message.html",
+                title="Chamada",
+                message="Matricula nao encontrada para esta turma.",
                 compact_layout=True,
+                student_layout=True,
             )
-            return render_message("Chamada", "Matricula nao encontrada para esta turma.")
 
         vinculo_dispositivo = ensure_device_binding(dispositivo, codigo)
         if vinculo_dispositivo and vinculo_dispositivo["codigo"] != codigo:
-            return render_message(
-                "Chamada",
-                "Este dispositivo j\u00e1 est\u00e1 vinculado a outra matr\u00edcula. Solicite desvincula\u00e7\u00e3o ao professor.",
+            return render_template(
+                "message.html",
+                title="Chamada",
+                message="Este dispositivo j\u00e1 est\u00e1 vinculado a outra matr\u00edcula. Solicite desvincula\u00e7\u00e3o ao professor.",
                 compact_layout=True,
-            )
-            return render_message(
-                "Chamada",
-                "Este dispositivo j\u00e1 est\u00e1 vinculado a outra matr\u00edcula. Solicite desvincula\u00e7\u00e3o ao professor.",
+                student_layout=True,
             )
 
         presenca_existente = conn.execute(
@@ -1285,16 +1395,26 @@ def aula(aula_id):
         conn.commit()
 
         resp = make_response(
-            render_message(
-                "Presen\u00e7a confirmada",
-                f"Presen\u00e7a registrada para {aluno['nome']}.",
+            render_template(
+                "message.html",
+                title="Presen\u00e7a confirmada",
+                message=f"Presen\u00e7a registrada para {aluno['nome']}.",
+                extra=f'<div class="actions"><a class="button" href="{url_for("minha_frequencia")}">Consultar minha frequ&ecirc;ncia</a></div>',
+                compact_layout=True,
+                student_layout=True,
             )
         )
         resp.set_cookie("codigo", codigo, max_age=60 * 60 * 24 * 180, httponly=True, samesite="Lax")
         resp.set_cookie("device", dispositivo, max_age=60 * 60 * 24 * 180, httponly=True, samesite="Lax")
         return resp
 
-    return render_template("confirmar_presenca.html", title="Confirmar Presen\u00e7a", aula=aula_row)
+    return render_template(
+        "confirmar_presenca.html",
+        title="Confirmar Presen\u00e7a",
+        aula=aula_row,
+        compact_layout=True,
+        student_layout=True,
+    )
 
 
 @app.route("/buscar_aluno/<int:turma_id>")

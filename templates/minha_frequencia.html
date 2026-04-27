@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel narrow student-frequency">
+    <p class="eyebrow">Consulta do aluno</p>
+    <h2>Minha frequ&ecirc;ncia</h2>
+    <p>Consulta liberada somente neste dispositivo, ap&oacute;s autentica&ccedil;&atilde;o pelo QR code.</p>
+
+    <article class="student-summary">
+        <strong>{{ aluno_nome }}</strong>
+        <span>Matr&iacute;cula {{ aluno_codigo }}</span>
+    </article>
+
+    <div class="student-frequency-list">
+        {% for item in frequencias %}
+        <article class="student-frequency-card">
+            <strong>{{ item["disciplina_nome"] }}</strong>
+            <span>Turma {{ item["turma_codigo"] }}</span>
+            <span>Data da aula: {{ item["data"] }}</span>
+            <span class="student-frequency-time" data-iso="{{ item["registrado_em"] }}">
+                Registro: {{ item["registrado_em"] }}
+            </span>
+        </article>
+        {% endfor %}
+    </div>
+</section>
+
+<script>
+document.querySelectorAll(".student-frequency-time").forEach((item) => {
+    const isoValue = item.dataset.iso;
+    const data = new Date(isoValue);
+
+    if (Number.isNaN(data.getTime())) {
+        return;
+    }
+
+    const dataFormatada = data.toLocaleDateString("pt-BR");
+    const horaFormatada = data.toLocaleTimeString("pt-BR", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+    });
+
+    item.textContent = "Registro: " + dataFormatada + " às " + horaFormatada;
+});
+</script>
+{% endblock %}
