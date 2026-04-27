@@ -4,6 +4,7 @@ from urllib.parse import urlparse
 import base64
 import io
 import os
+import re
 import sqlite3
 import unicodedata
 import uuid
@@ -697,8 +698,8 @@ def nova_turma():
         codigo = request.form["codigo"].strip().upper()
         if not codigo:
             return render_message("Nova Turma", "Informe o c\u00f3digo da turma.")
-        if not codigo.isalnum():
-            return render_message("Nova Turma", "O c\u00f3digo da turma deve conter apenas letras e n\u00fameros.")
+        if not re.fullmatch(r"[A-Z]{3}\d{6}:[A-Z]{2}\d{4}", codigo):
+            return render_message("Nova Turma", "Use o formato CIN202010:GO1304.")
         try:
             conn.execute("INSERT INTO turmas (codigo) VALUES (?)", (codigo,))
             conn.commit()

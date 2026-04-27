@@ -4,7 +4,7 @@
 <section class="panel narrow">
     <h2>Cadastrar Turma</h2>
     <form method="post" class="stack-form">
-        <input name="codigo" placeholder="Código da turma" pattern="[A-Za-z0-9]+" title="Use apenas letras e números" required>
+        <input name="codigo" placeholder="Código da turma" pattern="[A-Za-z]{3}[0-9]{6}:[A-Za-z]{2}[0-9]{4}" title="Use o formato CIN202010:GO1304" required>
         <button type="submit">Salvar</button>
     </form>
 </section>
