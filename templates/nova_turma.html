@@ -4,7 +4,7 @@
 <section class="panel narrow">
     <h2>Cadastrar Turma</h2>
     <form method="post" class="stack-form">
-        <input name="codigo" placeholder="Código da turma" required>
+        <input name="codigo" placeholder="Código da turma" pattern="[A-Za-z0-9]+" title="Use apenas letras e números" required>
         <button type="submit">Salvar</button>
     </form>
 </section>
