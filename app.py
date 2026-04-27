@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from urllib.parse import urlparse
 import base64
@@ -29,7 +29,7 @@ AULA_EXPIRATION_MINUTES = int(os.environ.get("AULA_EXPIRATION_MINUTES", "15"))
 LOGO_PATH = os.path.join(app.root_path, "logo.png")
 ADMIN_NOME = "Administrador"
 ADMIN_EMAIL = "administrador@frequencia.local"
-ADMIN_SENHA = "Frequenciaalfa"
+ADMIN_SENHA = "@frequencia@lfa"
 
 
 class Database:
@@ -109,6 +109,17 @@ class Database:
 
 
 conn = Database()
+
+
+def utc_now():
+    return datetime.now(UTC)
+
+
+def parse_utc_datetime(value):
+    parsed = datetime.fromisoformat(str(value))
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
 
 
 def column_exists(table_name, column_name):
@@ -285,7 +296,7 @@ def initialize_database():
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_turmas_codigo ON turmas (codigo)"
     )
 
-    now = datetime.utcnow().isoformat()
+    now = utc_now().isoformat()
     conn.execute(
         """
         UPDATE aulas
@@ -385,15 +396,15 @@ def require_admin():
 
 def aula_ativa(aula_row):
     try:
-        expira_em = datetime.fromisoformat(aula_row["expira_em"])
+        expira_em = parse_utc_datetime(aula_row["expira_em"])
     except (TypeError, ValueError):
         return False
-    return aula_row["status"] == "aberta" and datetime.utcnow() <= expira_em
+    return aula_row["status"] == "aberta" and utc_now() <= expira_em
 
 
 def format_display_date(date_value):
     try:
-        return datetime.fromisoformat(str(date_value)).strftime("%d-%m-%Y")
+        return parse_utc_datetime(date_value).strftime("%d-%m-%Y")
     except (TypeError, ValueError):
         return str(date_value)
 
@@ -452,7 +463,7 @@ def build_active_aula_view(aula_row):
         "disciplina_codigo": aula_row["disciplina_codigo"],
         "disciplina_nome": aula_row["disciplina_nome"],
         "expira_em_iso": aula_row["expira_em"],
-        "expira_em": datetime.fromisoformat(aula_row["expira_em"]).strftime("%d/%m/%Y %H:%M UTC"),
+        "expira_em": parse_utc_datetime(aula_row["expira_em"]).strftime("%d/%m/%Y %H:%M UTC"),
         "link": qr_payload["link"],
         "img": qr_payload["img"],
     }
@@ -1082,7 +1093,7 @@ def iniciar(alocacao_id):
         )
 
     if request.method == "POST":
-        agora = datetime.utcnow()
+        agora = utc_now()
         aula_id = str(uuid.uuid4())
         expira_em = agora + timedelta(minutes=AULA_EXPIRATION_MINUTES)
         conn.execute(
@@ -1125,7 +1136,7 @@ def encerrar_aula(aula_id):
         SET status = 'encerrada', expira_em = ?
         WHERE id = ? AND professor_id = ?
         """,
-        (datetime.utcnow().isoformat(), aula_id, professor["id"]),
+        (utc_now().isoformat(), aula_id, professor["id"]),
     )
     conn.commit()
     if updated.rowcount == 0:
@@ -1213,7 +1224,7 @@ def aula(aula_id):
                     INSERT INTO presenca (codigo, aula_id, dispositivo, registrado_em)
                     VALUES (?, ?, ?, ?)
                     """,
-                    (aluno_vinculado["codigo"], aula_id, dispositivo, datetime.utcnow().isoformat()),
+                    (aluno_vinculado["codigo"], aula_id, dispositivo, utc_now().isoformat()),
                 )
                 conn.commit()
 
@@ -1266,7 +1277,7 @@ def aula(aula_id):
                 INSERT INTO presenca (codigo, aula_id, dispositivo, registrado_em)
                 VALUES (?, ?, ?, ?)
                 """,
-                (codigo, aula_id, dispositivo, datetime.utcnow().isoformat()),
+                (codigo, aula_id, dispositivo, utc_now().isoformat()),
             )
         conn.commit()
 
