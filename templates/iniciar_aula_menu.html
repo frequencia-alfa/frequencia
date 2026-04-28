@@ -5,6 +5,7 @@
     <h2>Iniciar Aula</h2>
     <p>Professor logado: <strong>{{ professor["nome"] }}</strong></p>
     <p class="helper">Escolha a turma e disciplina que deseja abrir. O QR ficar&aacute; ativo por {{ expiration_minutes }} minutos e continuar&aacute; vis&iacute;vel nesta aba at&eacute; o encerramento manual ou o fim do tempo.</p>
+    <p class="helper">Durante a aula, o QR troca automaticamente a cada {{ active_aula["qr_rotation_seconds"] if active_aula else qr_rotation_seconds }} segundos.</p>
 </section>
 
 {% if active_aula %}
@@ -14,7 +15,8 @@
             <h2>Aula em andamento</h2>
             <p>Turma: <strong>{{ active_aula["turma_codigo"] }}</strong></p>
             <p>Disciplina: <strong>{{ active_aula["disciplina_nome"] }}</strong></p>
-            <p>QR v&aacute;lido at&eacute; <code>{{ active_aula["expira_em"] }}</code>.</p>
+            <p>QR da aula v&aacute;lido at&eacute; <code>{{ active_aula["expira_em"] }}</code>.</p>
+            <p>QR atual troca em <code id="qr-valid-until">{{ active_aula["qr_token_expires_at"] }}</code>.</p>
         </div>
         <div class="active-aula-actions">
             <span class="status-pill">QR ativo</span>
@@ -26,8 +28,8 @@
         <div id="presence-column-left" class="presence-column"></div>
 
         <div class="qr-stage">
-            <img src="data:image/png;base64,{{ active_aula['img'] }}" alt="QR da aula" class="qr-image qr-image-large">
-            <p><a href="{{ active_aula['link'] }}">{{ active_aula["link"] }}</a></p>
+            <img id="qr-image" src="data:image/png;base64,{{ active_aula['img'] }}" alt="QR da aula" class="qr-image qr-image-large">
+            <p><a id="qr-link" href="{{ active_aula['link'] }}">{{ active_aula["link"] }}</a></p>
             <div class="actions center-actions">
                 <a class="button" href="{{ url_for('relatorio', aula_id=active_aula['id']) }}">Acompanhar relat&oacute;rio</a>
                 <form method="post" action="{{ url_for('encerrar_aula', aula_id=active_aula['id']) }}" class="inline-form">
@@ -118,7 +120,7 @@ function renderColumn(column, items) {
         article.className = "presence-chip";
         article.innerHTML =
             "<strong>" + item.nome + "</strong>" +
-            "<span>" + item.codigo + " - " + formatHorario(item.registrado_em) + "</span>";
+            "<span>" + formatHorario(item.registrado_em) + "</span>";
         column.appendChild(article);
     });
 }
@@ -147,8 +149,28 @@ async function carregarPresencas() {
     }
 }
 
+async function atualizarQr() {
+    try {
+        const resposta = await fetch("/qr_payload/{{ active_aula['id'] }}", { cache: "no-store" });
+        if (!resposta.ok) {
+            return;
+        }
+
+        const dados = await resposta.json();
+        document.getElementById("qr-image").src = "data:image/png;base64," + dados.img;
+        const qrLink = document.getElementById("qr-link");
+        qrLink.href = dados.link;
+        qrLink.textContent = dados.link;
+        document.getElementById("qr-valid-until").textContent = dados.token_expires_at;
+    } catch (erro) {
+        console.error("Falha ao atualizar QR", erro);
+    }
+}
+
 carregarPresencas();
+atualizarQr();
 setInterval(carregarPresencas, 3000);
+setInterval(atualizarQr, 5000);
 
 if (!Number.isNaN(expiracaoAula.getTime())) {
     const tempoRestante = expiracaoAula.getTime() - Date.now();

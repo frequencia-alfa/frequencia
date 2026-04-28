@@ -6,11 +6,13 @@
     <p>Turma: <strong>{{ aula["turma_codigo"] }}</strong></p>
     <p>Disciplina: <strong>{{ aula["disciplina_nome"] }}</strong></p>
     <p>Digite pelo menos 2 letras do nome ou os numeros da matricula. O sistema vai filtrar e mostrar apenas o nome completo.</p>
+    <p class="helper">Este acesso foi liberado pelo QR atual. Se ele expirar, escaneie novamente.</p>
 
     <form method="post" class="stack-form">
         <label for="busca" class="field-label">Nome ou matricula</label>
         <input id="busca" placeholder="Comece a digitar seu nome ou matricula" autocomplete="off" required>
         <input id="codigo" name="codigo" type="hidden" required>
+        <input name="token" type="hidden" value="{{ qr_token }}">
         <div id="selecionado" class="helper"></div>
         <ul id="lista" class="search-results"></ul>
         <button type="submit">Confirmar presenca</button>

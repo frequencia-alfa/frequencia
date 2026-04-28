@@ -2,6 +2,8 @@ from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from urllib.parse import urlparse
 import base64
+import hashlib
+import hmac
 import io
 import os
 import re
@@ -27,6 +29,8 @@ app.secret_key = os.environ.get("SECRET_KEY", "troque-esta-chave-em-producao")
 DATABASE_URL = os.environ.get("DATABASE_URL")
 DATABASE_PATH = os.environ.get("DATABASE_PATH", "banco.db")
 AULA_EXPIRATION_MINUTES = int(os.environ.get("AULA_EXPIRATION_MINUTES", "15"))
+QR_ROTATION_SECONDS = int(os.environ.get("QR_ROTATION_SECONDS", "20"))
+QR_TOKEN_PREVIOUS_WINDOWS = int(os.environ.get("QR_TOKEN_PREVIOUS_WINDOWS", "1"))
 LOGO_PATH = os.path.join(app.root_path, "logo.png")
 ADMIN_NOME = "Administrador"
 ADMIN_EMAIL = "administrador@frequencia.local"
@@ -410,14 +414,58 @@ def format_display_date(date_value):
         return str(date_value)
 
 
-def build_qr_payload(aula_id):
-    link = request.host_url.rstrip("/") + "/aula/" + aula_id
+def current_qr_window(reference=None):
+    reference_dt = reference or utc_now()
+    return int(reference_dt.timestamp()) // QR_ROTATION_SECONDS * QR_ROTATION_SECONDS
+
+
+def qr_window_expires_at(window_start):
+    return datetime.fromtimestamp(window_start + QR_ROTATION_SECONDS, tz=UTC)
+
+
+def build_qr_token(aula_id, window_start):
+    secret = str(app.secret_key).encode("utf-8")
+    payload = f"{aula_id}:{window_start}".encode("utf-8")
+    signature = hmac.new(secret, payload, hashlib.sha256).hexdigest()[:16]
+    return f"{window_start}.{signature}"
+
+
+def validate_qr_token(aula_id, token):
+    if not token or "." not in token:
+        return False
+
+    window_raw, _signature = token.split(".", 1)
+    if not window_raw.isdigit():
+        return False
+
+    window_start = int(window_raw)
+    if window_start % QR_ROTATION_SECONDS != 0:
+        return False
+
+    current_window = current_qr_window()
+    if window_start > current_window:
+        return False
+    if current_window - window_start > QR_ROTATION_SECONDS * QR_TOKEN_PREVIOUS_WINDOWS:
+        return False
+
+    expected_token = build_qr_token(aula_id, window_start)
+    return hmac.compare_digest(token, expected_token)
+
+
+def build_qr_payload(aula_id, window_start=None):
+    qr_window = window_start if window_start is not None else current_qr_window()
+    token = build_qr_token(aula_id, qr_window)
+    link = url_for("aula", aula_id=aula_id, token=token, _external=True)
     qr = qrcode.make(link)
     buf = BytesIO()
     qr.save(buf)
+    token_expires_at = qr_window_expires_at(qr_window)
     return {
+        "token": token,
         "link": link,
         "img": base64.b64encode(buf.getvalue()).decode(),
+        "token_expires_at_iso": token_expires_at.isoformat(),
+        "token_expires_at": token_expires_at.strftime("%d/%m/%Y %H:%M:%S UTC"),
     }
 
 
@@ -465,6 +513,9 @@ def build_active_aula_view(aula_row):
         "disciplina_nome": aula_row["disciplina_nome"],
         "expira_em_iso": aula_row["expira_em"],
         "expira_em": parse_utc_datetime(aula_row["expira_em"]).strftime("%d/%m/%Y %H:%M UTC"),
+        "qr_rotation_seconds": QR_ROTATION_SECONDS,
+        "qr_token_expires_at_iso": qr_payload["token_expires_at_iso"],
+        "qr_token_expires_at": qr_payload["token_expires_at"],
         "link": qr_payload["link"],
         "img": qr_payload["img"],
     }
@@ -902,7 +953,48 @@ def iniciar_aula_menu():
         alocacoes_rows=alocacoes_rows,
         active_aula=active_aula,
         expiration_minutes=AULA_EXPIRATION_MINUTES,
+        qr_rotation_seconds=QR_ROTATION_SECONDS,
     )
+
+
+@app.route("/qr_payload/<aula_id>")
+def qr_payload(aula_id):
+    login_redirect = require_login()
+    if login_redirect:
+        return jsonify({"erro": "nao_autorizado"}), 401
+
+    professor = professor_logado()
+    aula_row = conn.execute(
+        """
+        SELECT
+            au.id,
+            au.turma_id,
+            au.disciplina_id,
+            au.professor_id,
+            au.expira_em,
+            au.criada_em,
+            au.status,
+            a.id AS alocacao_id,
+            t.codigo AS turma_codigo,
+            d.codigo AS disciplina_codigo,
+            d.nome AS disciplina_nome
+        FROM aulas au
+        JOIN turmas t ON t.id = au.turma_id
+        JOIN disciplinas d ON d.id = au.disciplina_id
+        LEFT JOIN alocacoes a
+            ON a.professor_id = au.professor_id
+           AND a.turma_id = au.turma_id
+           AND a.disciplina_id = au.disciplina_id
+        WHERE au.id = ? AND au.professor_id = ?
+        """,
+        (aula_id, professor["id"]),
+    ).fetchone()
+    if not aula_row or not aula_ativa(aula_row):
+        return jsonify({"erro": "aula_nao_encontrada"}), 404
+
+    payload = build_qr_payload(aula_id)
+    payload["qr_rotation_seconds"] = QR_ROTATION_SECONDS
+    return jsonify(payload)
 
 
 @app.route("/alocacoes/remover/<int:alocacao_id>", methods=["POST"])
@@ -1217,6 +1309,7 @@ def iniciar(alocacao_id):
         professor=professor,
         alocacao=alocacao,
         expiration_minutes=AULA_EXPIRATION_MINUTES,
+        qr_rotation_seconds=QR_ROTATION_SECONDS,
     )
 
 
@@ -1309,6 +1402,16 @@ def aula(aula_id):
             "message.html",
             title="Chamada encerrada",
             message="O QR desta aula expirou ou j\u00e1 foi encerrado.",
+            compact_layout=True,
+            student_layout=True,
+        )
+
+    qr_token = (request.form.get("token") or request.args.get("token") or "").strip()
+    if not validate_qr_token(aula_id, qr_token):
+        return render_template(
+            "message.html",
+            title="QR expirado",
+            message="Este QR n\u00e3o \u00e9 mais v\u00e1lido. Escaneie novamente o QR atual exibido pelo professor.",
             compact_layout=True,
             student_layout=True,
         )
@@ -1412,6 +1515,8 @@ def aula(aula_id):
         "confirmar_presenca.html",
         title="Confirmar Presen\u00e7a",
         aula=aula_row,
+        qr_token=qr_token,
+        qr_rotation_seconds=QR_ROTATION_SECONDS,
         compact_layout=True,
         student_layout=True,
     )

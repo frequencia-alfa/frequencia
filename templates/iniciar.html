@@ -7,6 +7,7 @@
     <p>Turma: <strong>{{ alocacao["turma_codigo"] }}</strong></p>
     <p>Disciplina: <strong>{{ alocacao["disciplina_nome"] }}</strong></p>
     <p>O QR ficar&aacute; ativo por {{ expiration_minutes }} minutos e continuar&aacute; dispon&iacute;vel na aba <strong>Iniciar aula</strong> at&eacute; o encerramento.</p>
+    <p class="helper">Enquanto a aula estiver aberta, o QR ser&aacute; rotativo e trocar&aacute; automaticamente a cada {{ qr_rotation_seconds }} segundos.</p>
     <form method="post" class="stack-form">
         <button type="submit">Gerar QR Code</button>
     </form>
