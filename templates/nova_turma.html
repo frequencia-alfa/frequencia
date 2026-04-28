@@ -3,9 +3,54 @@
 {% block content %}
 <section class="panel narrow">
     <h2>Cadastrar Turma</h2>
+    <p class="helper">Informe o código da turma como desejar. O sistema aceita letras, números e símbolos.</p>
     <form method="post" class="stack-form">
-        <input name="codigo" placeholder="Código da turma" pattern="[A-Za-z]{3}[0-9]{6}:[A-Za-z]{2}[0-9]{4}" title="Use o formato CIN202010:GO1304" required>
+        <input name="codigo" placeholder="Código da turma" required>
         <button type="submit">Salvar</button>
     </form>
 </section>
+
+{% if session_is_admin %}
+<section class="panel">
+    <h2>Turmas cadastradas</h2>
+    <p class="helper">A exclusão está disponível apenas para turmas sem alocações, alunos ou aulas vinculadas.</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Turma</th>
+                <th>Alocações</th>
+                <th>Alunos</th>
+                <th>Aulas</th>
+                <th>Ação</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if turmas %}
+                {% for turma in turmas %}
+                <tr>
+                    <td>{{ turma["codigo"] }}</td>
+                    <td>{{ turma["total_alocacoes"] }}</td>
+                    <td>{{ turma["total_alunos"] }}</td>
+                    <td>{{ turma["total_aulas"] }}</td>
+                    <td>
+                        {% if turma["total_alocacoes"] == 0 and turma["total_alunos"] == 0 and turma["total_aulas"] == 0 %}
+                        <form method="post" action="{{ url_for('remover_turma', turma_id=turma['id']) }}" class="inline-form">
+                            <button type="submit" class="button-link danger-link" onclick="return confirm('Excluir a turma {{ turma["codigo"] }}?')">Excluir</button>
+                        </form>
+                        {% else %}
+                        <span class="muted-action">Possui vínculos</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="5">Nenhuma turma cadastrada.</td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
 {% endblock %}

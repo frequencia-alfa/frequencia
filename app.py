@@ -6,7 +6,6 @@ import hashlib
 import hmac
 import io
 import os
-import re
 import sqlite3
 import unicodedata
 import uuid
@@ -843,16 +842,62 @@ def nova_turma():
         codigo = request.form["codigo"].strip().upper()
         if not codigo:
             return render_message("Nova Turma", "Informe o c\u00f3digo da turma.")
-        if not re.fullmatch(r"[A-Z]{3}\d{6}:[A-Z]{2}\d{4}", codigo):
-            return render_message("Nova Turma", "Use o formato CIN202010:GO1304.")
         try:
             conn.execute("INSERT INTO turmas (codigo) VALUES (?)", (codigo,))
             conn.commit()
         except sqlite3.IntegrityError:
             return render_message("Nova Turma", "J\u00e1 existe turma com esse c\u00f3digo.")
-        return redirect("/")
+        return redirect(url_for("nova_turma"))
 
-    return render_template("nova_turma.html", title="Nova Turma")
+    turmas = []
+    if usuario_admin():
+        turmas = conn.execute(
+            """
+            SELECT
+                t.id,
+                t.codigo,
+                (SELECT COUNT(*) FROM alocacoes WHERE turma_id = t.id) AS total_alocacoes,
+                (SELECT COUNT(*) FROM alunos WHERE turma_id = t.id) AS total_alunos,
+                (SELECT COUNT(*) FROM aulas WHERE turma_id = t.id) AS total_aulas
+            FROM turmas t
+            ORDER BY t.codigo
+            """
+        ).fetchall()
+
+    return render_template("nova_turma.html", title="Nova Turma", turmas=turmas)
+
+
+@app.route("/turmas/remover/<int:turma_id>", methods=["POST"])
+def remover_turma(turma_id):
+    admin_redirect = require_admin()
+    if admin_redirect:
+        return admin_redirect
+
+    turma = conn.execute(
+        """
+        SELECT
+            t.id,
+            t.codigo,
+            (SELECT COUNT(*) FROM alocacoes WHERE turma_id = t.id) AS total_alocacoes,
+            (SELECT COUNT(*) FROM alunos WHERE turma_id = t.id) AS total_alunos,
+            (SELECT COUNT(*) FROM aulas WHERE turma_id = t.id) AS total_aulas
+        FROM turmas t
+        WHERE t.id = ?
+        """,
+        (turma_id,),
+    ).fetchone()
+    if not turma:
+        return render_message("Excluir Turma", "Turma n\u00e3o encontrada.")
+
+    if turma["total_alocacoes"] or turma["total_alunos"] or turma["total_aulas"]:
+        return render_message(
+            "Excluir Turma",
+            f"A turma {turma['codigo']} n\u00e3o pode ser exclu\u00edda porque ainda possui v\u00ednculos no sistema.",
+        )
+
+    conn.execute("DELETE FROM turmas WHERE id = ?", (turma_id,))
+    conn.commit()
+    return redirect(url_for("nova_turma"))
 
 
 @app.route("/alocacoes", methods=["GET", "POST"])
