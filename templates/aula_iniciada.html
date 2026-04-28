@@ -63,7 +63,7 @@ function renderColumn(column, items) {
         article.className = "presence-chip";
         article.innerHTML =
             "<strong>" + item.nome + "</strong>" +
-            "<span>" + item.codigo + " - " + formatHorario(item.registrado_em) + "</span>";
+            "<span>" + formatHorario(item.registrado_em) + "</span>";
         column.appendChild(article);
     });
 }

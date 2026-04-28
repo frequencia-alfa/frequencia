@@ -5,7 +5,7 @@
     <h2>Confirmar Presenca</h2>
     <p>Turma: <strong>{{ aula["turma_codigo"] }}</strong></p>
     <p>Disciplina: <strong>{{ aula["disciplina_nome"] }}</strong></p>
-    <p>Digite pelo menos 2 letras do nome ou os numeros da matricula. O sistema vai filtrando e mostrando nome completo com a matricula.</p>
+    <p>Digite pelo menos 2 letras do nome ou os numeros da matricula. O sistema vai filtrar e mostrar apenas o nome completo.</p>
 
     <form method="post" class="stack-form">
         <label for="busca" class="field-label">Nome ou matricula</label>
@@ -32,9 +32,9 @@ function limparLista() {
 }
 
 function selecionarAluno(item) {
-    buscaInput.value = item.nome + " (" + item.codigo + ")";
+    buscaInput.value = item.nome;
     codigoInput.value = item.codigo;
-    selecionado.textContent = "Selecionado: " + item.nome + " - " + item.codigo;
+    selecionado.textContent = "Selecionado: " + item.nome;
     limparLista();
 }
 
@@ -92,7 +92,7 @@ async function buscarAluno() {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "search-result-button";
-        button.innerHTML = "<strong>" + item.nome + "</strong><span>" + item.codigo + "</span>";
+        button.innerHTML = "<strong>" + item.nome + "</strong>";
         button.onclick = () => selecionarAluno(item);
         li.appendChild(button);
         lista.appendChild(li);
